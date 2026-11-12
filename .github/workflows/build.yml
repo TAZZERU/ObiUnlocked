@@ -8,7 +8,7 @@ name: Build firmware
 #  - on a PUBLISHED RELEASE-> build all variants and attach the .bin files to that release; the firmware's
 #                            reported version is taken from the tag
 #
-# The firmware version is major.minor (BASE_VERSION in open_obi_energy_meter/version.py) + a patch number
+# The firmware version is major.minor (BASE_VERSION in obiunlocked/version.py) + a patch number
 # derived from the existing git tags: the next release is (highest v<base>.<n> tag) + 1, or <base>.0 if no
 # such tag exists yet. So the very first release of a new major.minor starts at .0 and climbs monotonically
 # from there. Bump BASE_VERSION by hand to start a fresh major/minor line (e.g. 1.1 -> first tag v1.1.0).
@@ -17,12 +17,12 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'open_obi_energy_meter/**'
+      - 'obiunlocked/**'
       - 'reader_firmware_mod/**'
       - '.github/workflows/build.yml'
   pull_request:
     paths:
-      - 'open_obi_energy_meter/**'
+      - 'obiunlocked/**'
       - 'reader_firmware_mod/**'
       - '.github/workflows/build.yml'
   release:
@@ -47,7 +47,7 @@ jobs:
       - name: Compute firmware version
         id: v
         run: |
-          base=$(grep -oP 'BASE_VERSION\s*=\s*"\K[^"]+' open_obi_energy_meter/version.py)
+          base=$(grep -oP 'BASE_VERSION\s*=\s*"\K[^"]+' obiunlocked/version.py)
           if [ "${{ github.event_name }}" = "release" ]; then
             # a manually published release pins the firmware to its own tag
             ver="${{ github.ref_name }}"; ver="${ver#v}"
@@ -73,9 +73,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y g++ libssl-dev
-          python -m pip install -r open_obi_energy_meter/tests/requirements.txt
+          python -m pip install -r obiunlocked/tests/requirements.txt
       - name: Run host tests
-        run: python -m pytest open_obi_energy_meter/tests -q
+        run: python -m pytest obiunlocked/tests -q
 
   build:
     name: Build ${{ matrix.variant }}
@@ -105,7 +105,7 @@ jobs:
           path: |
             ~/.platformio
             ~/.cache/pip
-          key: pio-${{ runner.os }}-${{ hashFiles('open_obi_energy_meter/platformio.ini') }}
+          key: pio-${{ runner.os }}-${{ hashFiles('obiunlocked/platformio.ini') }}
           restore-keys: pio-${{ runner.os }}-
 
       - name: Install PlatformIO
@@ -115,16 +115,16 @@ jobs:
         run: echo "FW_VERSION_OVERRIDE=${{ needs.version.outputs.version }}" >> "$GITHUB_ENV"
 
       - name: Build ${{ matrix.variant }}
-        working-directory: open_obi_energy_meter
+        working-directory: obiunlocked
         run: pio run -e ${{ matrix.variant }}
 
       - name: Check BLE image and history reserve
         if: matrix.variant == 'obi_gateway_c3'
-        working-directory: open_obi_energy_meter
+        working-directory: obiunlocked
         run: python tests/verify_bthome_image.py .pio/build/obi_gateway_c3
 
       - name: Stage binary
-        working-directory: open_obi_energy_meter
+        working-directory: obiunlocked
         run: |
           mkdir -p dist
           cp ".pio/build/${{ matrix.variant }}/firmware.bin" \
@@ -135,7 +135,7 @@ jobs:
         with:
           retention-days: 7
           name: ${{ matrix.variant }}
-          path: open_obi_energy_meter/dist/*.bin
+          path: obiunlocked/dist/*.bin
           if-no-files-found: error
 
   build-reader:

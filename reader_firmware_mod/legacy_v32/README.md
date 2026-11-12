@@ -20,7 +20,7 @@ The reader's meter-read state machine (repo numbering `0xD624`, state struct `0x
 cycles. It enables the meter UART, takes **one** telegram and disables the UART again. It then waits in
 state `0x114` until `(now_s - start_s) > period`, checked by `sub_C074` in whole seconds. `period` is
 the **upload interval** (`S[8]`, the value the gateway sends in the energy ACK). The gateway's "Live"
-preset arrives as interval 2 (`2 × b[1]`, see the legacy ACK in `open_obi_energy_meter/src/main.cpp`),
+preset arrives as interval 2 (`2 × b[1]`, see the legacy ACK in `obiunlocked/src/main.cpp`),
 so the pause alone is 3 s. Then the reader waits for the next telegram. The result is 3–4 s per
 reading, even though the reader never sleeps on USB power and the meter sends every second.
 

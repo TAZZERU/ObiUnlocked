@@ -1,4 +1,4 @@
-// setup_ap.h — when the 'OpenOBI-<MAC>' setup AP may be up.
+// setup_ap.h — when the 'ObiUnlocked-<MAC>' setup AP may be up.
 // Opt-in (Settings, NVS "aplim"): the AP opens after boot or a short case-button tap for OBI_SETUP_AP_MS,
 // then stays off even if WiFi drops later, so an unattended gateway never advertises its dashboard.
 // Exceptions: no WiFi saved yet (the AP is the only way in) and a client still connected (don't cut a

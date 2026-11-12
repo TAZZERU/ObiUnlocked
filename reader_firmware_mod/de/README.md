@@ -545,7 +545,7 @@ die jeweilige SF7-Basis (nur die beabsichtigten Bytes ändern sich):
    wie am Anfang dieses Dokuments festgehalten — nie gepatcht, nur die App-Firmware wird verändert), daher
    muss ein auf SF9 konfiguriertes Gateway für die Dauer eines Reader-OTA-Uploads trotzdem auf SF7
    herunterschalten und danach zu SF9 zurückkehren. Siehe `g_liveSF`/`applyLiveSF()`/`gw_ota_arm()`/
-   `OTA_SF9_GRACE_MS` in `open_obi_energy_meter/src/main.cpp`. Der Settings-Umschalter selbst
+   `OTA_SF9_GRACE_MS` in `obiunlocked/src/main.cpp`. Der Settings-Umschalter selbst
    (`/api/lora/sf`) speichert nur die *gewünschte* Boot-SF im NVS — das Anwenden erfordert immer einen
    Neustart, bewusst niemals ein Live-Hot-Swap, da beide Seiten schon übereinstimmen müssen, bevor eine von
    beiden die Änderung anwendet.

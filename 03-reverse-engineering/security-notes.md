@@ -25,7 +25,7 @@ plaintext control-frame payloads are effectively public on **every** firmware. T
 
 > **Correction (verified by building the ESP32 gateway).** An earlier version of this note claimed the
 > *energy payload* also stayed 1-byte-XOR on `1.0.x`/`3x.x`, on the assumption that the ECDH secret "went
-> unused." Pairing a real reader with our own gateway ([../open_obi_energy_meter](../open_obi_energy_meter))
+> unused." Pairing a real reader with our own gateway ([../obiunlocked](../obiunlocked))
 > disproved that. The old reader the cloud reports as firmware **`1.0.1`** in fact reports **softver 32
 > ("v32")** on the LoRa link and runs the **same ECDH → TEA-ECB** crypto as 1.2.x. Reversed from the v32
 > reader's ack handler `sub_B7A0`, that reader **requires** its energy ACK (cmd 24→56 / 25→57) to be

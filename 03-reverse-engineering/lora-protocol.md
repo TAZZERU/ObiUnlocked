@@ -116,7 +116,7 @@ data rejected), so the handshake is always *required*.
 
 The shared secret **is the LoRa key** — and (correcting an earlier assumption here) that is true on the
 **old v32 readers too**, not just 1.2.x. This was confirmed by building the ESP32 gateway
-([../open_obi_energy_meter](../open_obi_energy_meter)): the old reader whose cloud firmware string is
+([../obiunlocked](../obiunlocked)): the old reader whose cloud firmware string is
 `1.0.1` reports **softver 32 ("v32")** on the link and **requires** its energy ACK (cmd 24→56 / 25→57) to
 be **TEA-encrypted** with the ECDH-derived key (reversed from its ack handler `sub_B7A0`); its energy
 uplink is decoded via the same TEA path (`tea/legacy`).

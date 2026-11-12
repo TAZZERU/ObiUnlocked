@@ -1,3 +1,5 @@
+> **ObiUnlocked:** Diese Datei beschreibt die OpenOBI-Basis der Firmware. Was ObiUnlocked zusätzlich kann, steht in der [Haupt-README](../README.md).
+
 <a name="english"></a>
 # Open OBI Energy Meter — ESP32 + SX1262 LoRa gateway
 
@@ -176,7 +178,7 @@ the vendor's.** OTA on the stock firmware is unsigned (integrity CRC only), whic
 self-update possible. The full step-by-step (bring the device onto your own cloud → get the `.bin` → push it →
 optionally back up the stock image afterward from the device's Debug page) is in the top-level README:
 
-- 🇬🇧 / 🇩🇪 **[Stock gateway → custom firmware, step by step](../README.md#stock-to-custom)**
+- 🇬🇧 / 🇩🇪 **[Stock gateway → custom firmware, step by step](../OPENOBI.md#stock-to-custom)**
 
 You don't even need the toolchain — **download the prebuilt C3 image from the
 [Releases page](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud/releases)**, or build it yourself:
@@ -636,7 +638,7 @@ unsigniert (nur Integritäts-CRC), was dieses Self-Update überhaupt erst mögli
 Schritt-für-Schritt-Anleitung (Gerät auf eigene Cloud → `.bin` besorgen → Image pushen → danach optional das
 Stock-Image über die Debug-Seite des Geräts sichern) steht im Haupt-README:
 
-- 🇩🇪 / 🇬🇧 **[Stock-Gateway → eigene Firmware, Schritt für Schritt](../README.md#stock-to-custom)**
+- 🇩🇪 / 🇬🇧 **[Stock-Gateway → eigene Firmware, Schritt für Schritt](../OPENOBI.md#stock-to-custom)**
 
 Du brauchst nicht mal die Toolchain — **lade das fertige C3-Image von der
 [Releases-Seite](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud/releases)**, oder bau es selbst:

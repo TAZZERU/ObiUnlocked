@@ -1,235 +1,174 @@
-# OBI Energy Bridge — Reverse Engineering & Self-Hosting
+# ObiUnlocked
 
-> 🔓 **ObiUnlocked fork:** this firmware additionally listens for **wireless M-Bus** (heat cost allocators, smoke
-> detectors, water/heat meters, e.g. Minol, Zenner, Techem, ista) and **LoRaWAN** in the OBI radio's idle time, lets
-> you pick devices on the new **📟 Funkgeräte** page and publishes them to MQTT / Home Assistant. The OBI meter
-> reader keeps working. → **[OBIUNLOCKED.md](OBIUNLOCKED.md)** (German)
+Firmware für das **OBI/heyOBI-Energie-Gateway** (ESP32-C3 + SX1262). Sie macht das Gerät zu einem lokalen
+868-MHz-Empfänger für die ganze Wohnung:
 
-Full teardown of the **OBI energy-tracking system**: a WiFi/BLE **bridge** (ESP32-C3) that relays data
-from LoRa **meter readers** (BAT32G135) to an AWS-IoT cloud. This repo documents the protocols end-to-end
-and shows how to **run the device against your own cloud** or **talk to the reader directly over
-868 MHz** — so you actually own the hardware you bought.
+- **OBI-Stromzähler-Lesekopf:** funktioniert wie mit OpenOBI und hat beim Funk immer Vorrang
+- **wireless M-Bus:** Heizkostenverteiler, Rauchmelder, Wasser-, Wärme- und Gaszähler (Minol, Zenner, Qundis,
+  Techem, ista, Diehl, Kamstrup …)
+- **Funk-Wettersensoren:** LaCrosse/TFA IT+, Bresser 5-in-1/6-in-1/7-in-1
+- **LoRaWAN:** Monitor für Geräte in der Umgebung, mit eigenen Session-Keys auch mit entschlüsselten Messwerten
 
-> Sold under the **heyOBI** brand; the hardware is manufactured by **SUMEC** (<https://en.sumec.com/>) —
-> which is why the reader firmware and cloud identifiers carry the `SUMEC` name.
+Alles erscheint im Dashboard des Gateways mit verständlichen Bezeichnungen, also „Zählerstand“, „Stand am
+Stichtag“ oder „Letzter Alarm“ statt Rohdaten. Einzelne Geräte gibst du per Schalter an MQTT und Home Assistant
+weiter.
 
-> ⚠️ **Use on your own devices only.** See [DISCLAIMER.md](DISCLAIMER.md). All keys, certs, UUIDs and
-> device IDs in this repo are **placeholders** (e.g. `00112233...EEFF`). Nothing here targets the
-> vendor's cloud; the goal is local ownership and interoperability.
+ObiUnlocked ist ein Fork von [OpenOBI](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud) (atc1441).
+Dessen Doku, also Reverse Engineering, eigene Cloud und Flashen des Original-Gateways, liegt unverändert in
+[OPENOBI.md](OPENOBI.md) und den nummerierten Ordnern.
 
----
+> Nur Empfang: ObiUnlocked sendet auf wM-Bus, LoRaWAN und den Wetterfrequenzen nichts. Lies nur Geräte aus, deren
+> Daten dir zustehen. Lizenz: PolyForm Noncommercial (siehe [LICENSE](LICENSE)), wie beim Originalprojekt.
 
-### ⚡ Flash open-source firmware straight onto the original OBI Gateway → **[Open ESP32-C3 gateway firmware](open_obi_energy_meter/)**
-A complete **open-source ESP32-C3 firmware** that **replaces the vendor bridge outright**. It runs
-**on generic ESP32 + SX1262 boards** (Heltec, LILYGO, Seeed XIAO, …) — **and specifically on the original
-OBI/heyOBI Gateway**, where it is **installed over-the-air via OTA** (no UART/soldering — the bootloader is
-locked). It pairs the LoRa readers itself, decodes the energy on-device, and gives you a **local web
-dashboard + MQTT / MQTTS** with Home-Assistant discovery — plus reader-OTA and self-update.
+## Installation
 
-Jump to the [**step-by-step stock → custom guide**](#stock-to-custom) (EN + DE), or read the full German
-walkthrough → **[de/README.md](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud/blob/main/de/README.md)**.
+**OpenOBI läuft schon auf dem Gateway:** Öffne im Browser **Einstellungen → Firmware**, lade `firmware.bin` hoch,
+fertig. WLAN, MQTT, gekoppelte Leseköpfe und die Historie bleiben erhalten. Ein fehlerhaftes Image weist das
+Gateway ab, die laufende Firmware bleibt dann unverändert.
 
-This repo is made together with these explanation videos:(click on the image)
+**Original-Gateway mit Hersteller-Firmware:** Einmalig den Weg aus OpenOBI gehen
+([Stock-Gateway → eigene Firmware](OPENOBI.md#stock-to-custom)). Danach geht jedes Update über die Weboberfläche.
 
-[![YoutubeVideo](https://img.youtube.com/vi/2jMEaRuSJ18/0.jpg)](https://www.youtube.com/watch?v=2jMEaRuSJ18)
+**Bauen:**
 
-
-[![YoutubeVideo](https://img.youtube.com/vi/U4Vvf0kHnEk/0.jpg)](https://www.youtube.com/watch?v=U4Vvf0kHnEk)
-
-### 👉 Just want your own cloud working? → **[QUICKSTART.md](QUICKSTART.md)** (1‑to‑Done, start to finish)
-
-### 🇩🇪 **Alles auf Deutsch → [ANLEITUNG.md](ANLEITUNG.md)** (Schritt‑für‑Schritt) · vollständige Doku unter **[de/](de/README.md)**
-
----
-
-## The system in one picture
-
-```mermaid
-flowchart LR
-    M["⚡ Electricity meter"] -->|"IR / optical<br/>OBIS registers"| R["📟 Reader<br/>BAT32G135 + LoRa"]
-    R <-->|"868 MHz LoRa<br/>SX1262 · TEA-ECB (ECDH)"| B["📶 Bridge<br/>ESP32-C3<br/>WiFi + BLE"]
-    B <-->|"MQTTS 8883<br/>TLS + AWS IoT"| C[("☁️ Cloud<br/>yours or vendor")]
-    P["📱 Phone app"] -.->|"BLE ABF1/ABF2<br/>TEA + JSON"| B
-    subgraph Field
-      M; R
-    end
-    subgraph Home
-      B
-    end
+```bash
+cd obiunlocked
+pip install platformio
+pio run -e obi_gateway_c3        # -> .pio/build/obi_gateway_c3/firmware.bin
 ```
 
-- **Meter → Reader:** the reader reads the electricity meter optically and decodes **OBIS / IEC-62056**
-  registers (`1.8.x` import, `2.8.x` export, `16.7.0` power).
-- **Reader → Bridge:** LoRa at 868 MHz (Semtech SX1262 / Ai-Thinker Ra-03SCH), a small framed protocol.
-- **Bridge → Cloud:** MQTT over TLS (port 8883), AWS-IoT-style **fleet provisioning**.
-- **Phone ↔ Bridge:** BLE GATT (service `ABF0`, chars `ABF1`/`ABF2`), payload is JSON wrapped in **TEA**.
+Mit `pio run -e obi_gateway_c3 -t push` wird gebaut und direkt hochgeladen. Adresse und Login stehen in
+`platformio.local.ini` (siehe `platformio.local.ini.example`). Die anderen Board-Varianten aus OpenOBI
+(Heltec, LILYGO, XIAO, generic) bauen genauso.
 
-## What you can do with this
+## Dashboard
 
-| Goal | How | Section |
+| Bereich | Inhalt |
+|---|---|
+| **Stromzähler** | OBI-Leseköpfe: Bezug, Einspeisung, Leistung, Batterie, Intervall, Binden, Namen, Kachel-Layout, Lesekopf-Firmware per LoRa |
+| **Funkgeräte** | Alle empfangenen Geräte als Liste: Name/Typ, Hersteller, **aktueller Wert**, Signal, zuletzt gesehen, Verschlüsselung. Filter nach Zähler / Heizkosten / Rauchmelder / Wetter / LoRaWAN. Ein Klick öffnet die Details. |
+| **Empfang** | Welche Empfänger aktiv sind, Aufteilung der Funkzeit, Statistik, Live-Log |
+
+In den **Details** eines Geräts:
+- alle Messwerte mit deutscher Bezeichnung und Einheit
+- Name vergeben
+- AES-Schlüssel eintragen (wM-Bus) bzw. NwkSKey/AppSKey (LoRaWAN)
+- Technik-Infos und Rohdaten (Telegramm und entschlüsselter Klartext)
+- Gerät vergessen
+
+Die übrigen Seiten (Verlauf, OBI-Funk, Einstellungen, Debug) stammen aus OpenOBI.
+
+## Was ausgewertet wird
+
+| Gerät | Ohne Schlüssel | Mit Schlüssel / Details |
 |---|---|---|
-| **Point the bridge at your own MQTTS server** | Get the bridge's TEA key → push your CA + certs + broker URL over BLE → run your own broker | [04 · Connect your own cloud](04-connect-your-own-cloud/) |
-| **Read the meter reader directly over 868 MHz** | Skip the cloud entirely; speak the LoRa protocol to the reader | [05 · LoRa direct (868 MHz)](05-lora-direct-868mhz/) |
-| **Replace the bridge with your own ESP32** ✅ | Full mini-gateway firmware: pair readers, decode energy, web + MQTT, set interval, flash readers over the air | [Open OBI Energy Meter](open_obi_energy_meter/) |
-| **Pair a reader to a bridge** ✅ | `SensorScan` (find) → `SensorBind` (pair) → `Sensor` (status) — verified on hardware | [07 · Add a reader](07-add-a-reader/) |
-| **Understand / extend the firmware** | Protocols, frame formats, memory maps + IDA setup (bring your own dump) | [03 · Reverse engineering](03-reverse-engineering/) · [firmware/](firmware/) |
+| Unverschlüsselte OMS-Zähler (z. B. Qundis, viele Wasserzähler) | Zählerstand, Stichtagswerte, Datum, Status | – |
+| Qundis Walk-by (herstellereigener Block) | Zählerstand, Stand am Jahres- und Monatsstichtag, Verbrauch seit Stichtag, Fehlerdatum | – |
+| Techem Heizkostenverteiler / Wasserzähler | aktuelle und vorige Periode, Stichtage, Raum-/Heizkörpertemperatur | – |
+| Diehl/Sappel IZAR-Wasserzähler | Zählerstand, Monatswert, Batterie-Restlaufzeit | – |
+| Minol, Zenner, ista, Techem (verschlüsselt, AES Mode 5/7) | Hersteller, ID, Typ, Signal, Status | alle Messwerte |
+| Rauchmelder (OMS, Ei-Electronics-Bauart) | Status | letzter Alarm, Anzahl Alarme, Demontagen, Testknopf, Verschmutzung, Batteriespannung, Fehlertext |
+| LaCrosse IT+ | Temperatur, Luftfeuchte, Batterie | – |
+| Bresser 5/6/7-in-1 | Temperatur, Feuchte, Wind, Regen, UV, Licht (6/7-in-1 experimentell) | – |
+| LoRaWAN | DevAddr, Frame-Zähler, Port, Signal; bei Join-Requests die DevEUI | Nutzdaten, Cayenne LPP als Messwerte |
 
-## Two ways to move the bridge onto your own cloud
+Aus Zählerstand und Stichtagswert errechnet die Firmware zusätzlich **„Verbrauch seit Stichtag“**.
 
-Both need the device's **16-byte TEA key** (per bridge, encrypts the BLE control channel). Getting it is
-easy — pick one:
+**AES-Schlüssel** für Messdienst-Geräte bekommst du vom Messdienst bzw. über Vermieter oder Hausverwaltung, mit
+den Geräte-IDs aus der Liste. Ohne Schlüssel lassen sich verschlüsselte Werte nicht lesen.
 
-1. **From the cloud** (any OBI login + the BLE name — the device need **not** be on your account): enter
-   **email + password + BLE name `OBI-XXXXXX`** → `python tools/fetch_tea_key.py` prints the key. See
-   [04 · Step 0](04-connect-your-own-cloud/README.md#step-0--get-the-devices-tea-key).
-2. **From UART** (physical access): read it off the console — send cmd 49 or click one button in the
-   [web tool](06-tools/obi_uart_config.html). See [03 · UART config](03-reverse-engineering/uart-config-protocol.md).
+## Wie der Funkchip geteilt wird
 
-Once you have the key, the flow is: **unbind → set your WiFi → push your CA + claim cert + broker URL
-(`SetTMPCertificate`) → run your MQTTS broker** that answers fleet-provisioning with a *consistent*
-certificate. From then on everything works over MQTTS against your server. A **custom firmware** would
-have to be delivered through that same cloud OTA path, because the ROM download mode is fused off (locked
-bootloader) — see [04](04-connect-your-own-cloud/) and [03 · firmware layout](03-reverse-engineering/firmware-layout.md).
-
-## 🔧 Turn the stock gateway into an open ESP32-C3 gateway (EN + DE) <a id="stock-to-custom"></a>
-
-The flagship of this repo lives in **[`open_obi_energy_meter/`](open_obi_energy_meter/)**: a complete
-open-source firmware that **replaces the vendor bridge entirely**. It runs on the **original OBI/heyOBI
-ESP32-C3 hardware** *and* on off-the-shelf ESP32 + SX1262 boards, pairs the LoRa readers itself, decrypts
-the energy payload, and serves a **local web dashboard + MQTT** — no vendor cloud, ever.
-
-**What the firmware does**
-- 📟 **Pairs & reads the meters over LoRa** (869.5 MHz) — does the ECDH + TEA key exchange and decodes
-  energy on-device (both reader generations).
-- 🌐 **Local web dashboard (DE/EN):** live import / export / power, battery, RSSI **+ SNR**, per-reader
-  energy **history** with daily kWh & cost.
-- 🔌 **MQTT with Home-Assistant auto-discovery** — including **MQTTS (TLS)** and **username / password**.
-- 🔒 **Login screen** (session-based) protecting the whole dashboard.
-- ⬆️ **OTA everywhere:** flash **readers over LoRa**, self-update the gateway from a **`.bin` or GitHub
-  release**, and **factory-reset** from the web UI.
-- 🧰 **Multi-board:** stock OBI C3, Heltec Vision Master E290 (e-paper), LILYGO T-Beam, Seeed XIAO S3, or
-  any generic ESP32 / ESP32-S3 + SX1262. Build with `pio run -e obi_gateway_c3`.
-
-Full firmware docs & build matrix: **[`open_obi_energy_meter/README.md`](open_obi_energy_meter/README.md)**.
-
-### 🇬🇧 From stock gateway → custom firmware (step by step)
-
-The stock C3 has a **locked bootloader** (ROM download mode fused off → no UART/JTAG flashing), so the
-custom image is delivered **once**, through the device's own (now *yours*) **cloud OTA** path. After that
-the firmware has its own built-in web updater and never needs a cloud again.
-
-1. **Get the device onto your own cloud** — follow **[04 · Connect your own cloud](04-connect-your-own-cloud/)**:
-   fetch the TEA key → `gen_certs.py` → run `mqtts_server.py` → BLE-provision your WiFi + broker + CA.
-2. **Get the C3 `firmware.bin`** — either is fine:
-   - **Download it** (easiest): grab the prebuilt `obi_gateway_c3` firmware from the
-     **[Releases page](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud/releases)** — no toolchain needed.
-   - **Or build it yourself:** `cd open_obi_energy_meter && pio run -e obi_gateway_c3` →
-     `.pio/build/obi_gateway_c3/firmware.bin`
-3. **Push that `.bin` over the cloud OTA path** (unsigned self-update → your image is accepted):
-   `python 04-connect-your-own-cloud/tools/mqtts_server.py --host 0.0.0.0 --port 8883 --ota-firmware <firmware.bin>`
-   On its next connect the device pulls the image in chunks and reboots into it.
-4. **Done — it's now an open local gateway.** It comes up as the **`OpenOBI-XXXXXX`** WiFi setup portal →
-   join it, set your WiFi / MQTT, open the dashboard. From now on **all** updates go through
-   **Settings → Firmware** (upload a `.bin` or pull a GitHub release) — **no cloud needed**.
-5. **Back up the stock image — now straight from the device.** The partition table is **dual-OTA**, so your
-   original firmware is still sitting untouched in the *other* app slot after the flash, and the firmware
-   deliberately leaves it there: the big history store would normally use that slot's free space, but it
-   keeps its hands off an image it never put there and logs to the small 128 KB partition instead
-   ([#100](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud/issues/100)). Open the custom firmware's **🐞 Debug** page → **Dump full flash** to download a complete
-   backup (bootloader + partition table + both app slots + NVS) for restore/downgrade. Two things erase
-   that copy, so do this first: your next self-update (it reuses the spare slot) and the **Release the slot
-   for history** button the Debug page offers right there, which trades the stock image for the full ~1.6 MB
-   of history. *(The old pre-flash method — `python 04-connect-your-own-cloud/tools/obi_ota_download.py`
-   over your cloud — still works but is no longer needed.)*
-
-> ⚠️ Step 3 is the only hard-to-reverse step — a wrong image can't be re-flashed over UART. It is brick-safe
-> (a bad image is rejected and the running firmware kept), and you can still pull a full stock backup
-> afterward via **Debug → Dump full flash** (step 5).
-
-### 🇩🇪 Vom Stock-Gateway → eigene Firmware (Schritt für Schritt)
-
-Der originale C3 hat einen **gesperrten Bootloader** (ROM-Download-Modus per eFuse deaktiviert → kein
-Flashen über UART/JTAG). Die eigene Firmware wird deshalb **einmalig über den Cloud-OTA-Weg** aufgespielt —
-über *deine* eigene Cloud. Danach hat die Firmware ihren eigenen Web-Updater und braucht nie wieder eine Cloud.
-
-1. **Gerät auf deine eigene Cloud bringen** — nach **[04 · Connect your own cloud](04-connect-your-own-cloud/)**:
-   TEA-Key holen → `gen_certs.py` → `mqtts_server.py` starten → per BLE WLAN + Broker + CA provisionieren.
-2. **C3-`firmware.bin` besorgen** — beides geht:
-   - **Herunterladen** (am einfachsten): die fertige `obi_gateway_c3`-Firmware von der
-     **[Releases-Seite](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud/releases)** holen — keine Toolchain nötig.
-   - **Oder selbst bauen:** `cd open_obi_energy_meter && pio run -e obi_gateway_c3` →
-     `.pio/build/obi_gateway_c3/firmware.bin`
-3. **Diese `.bin` über den Cloud-OTA-Weg aufspielen** (unsigniertes Self-Update → dein Image wird akzeptiert):
-   `python 04-connect-your-own-cloud/tools/mqtts_server.py --host 0.0.0.0 --port 8883 --ota-firmware <firmware.bin>`
-   Beim nächsten Verbinden zieht das Gerät das Image in Blöcken und startet damit neu.
-4. **Fertig — jetzt ein offenes lokales Gateway.** Es startet als WLAN-Setup-Portal **`OpenOBI-XXXXXX`** →
-   verbinden, WLAN / MQTT einstellen, Dashboard öffnen. Ab jetzt laufen **alle** Updates über
-   **Einstellungen → Firmware** (`.bin` hochladen oder GitHub-Release ziehen) — **ohne Cloud**.
-5. **Stock-Image sichern — jetzt direkt vom Gerät.** Die Partitionstabelle ist **Dual-OTA**, deine originale
-   Firmware liegt nach dem Flashen also unangetastet im *anderen* App-Slot — und die Firmware lässt sie dort
-   auch liegen: der große History-Speicher würde normalerweise den freien Platz dieses Slots nutzen, rührt
-   ein Image, das er nicht selbst dort hingeschrieben hat, aber nicht an und loggt stattdessen in die kleine
-   128-KB-Partition ([#100](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud/issues/100)). Öffne die **🐞 Debug**-Seite der eigenen Firmware → **Dump full flash** und
-   lade ein vollständiges Backup herunter (Bootloader + Partitionstabelle + beide App-Slots + NVS) zum
-   Wiederherstellen/Downgraden. Zwei Dinge löschen diese Kopie, mach es also vorher: das nächste Self-Update
-   (es verwendet den freien Slot) und der Button **Slot für die History freigeben** auf derselben
-   Debug-Seite, der das Stock-Image gegen die vollen ~1,6 MB History tauscht. *(Die alte Vorab-Methode —
-   `python 04-connect-your-own-cloud/tools/obi_ota_download.py` über deine Cloud — funktioniert weiter, ist
-   aber nicht mehr nötig.)*
-
-> ⚠️ Schritt 3 ist der einzige schwer umkehrbare Schritt — ein falsches Image lässt sich nicht über UART neu
-> flashen. Er ist brick-sicher (ein kaputtes Image wird abgelehnt, die laufende Firmware bleibt), und ein
-> volles Stock-Backup kannst du danach jederzeit über **Debug → Dump full flash** ziehen (Schritt 5).
-
-## Repository layout
+Der SX1262 hört immer nur eine Modulation. Jede Sekunde läuft so ab:
 
 ```
-01-architecture/            System + data-flow diagrams (cloud & LoRa, who talks to whom)
-02-hardware/                ESP32-C3, BAT32G135, SX1262/Ra-03, pinouts, 868 MHz
-03-reverse-engineering/     Protocols: BLE, LoRa, UART config, firmware layout
-04-connect-your-own-cloud/  Manual + tools: MQTTS broker, PKI, BLE provisioning, own AP/DNS
-05-lora-direct-868mhz/      Talk to the reader over the air, no cloud
-06-tools/                   Web tools (UART config, BLE gateway) + BLE TEA codec
-07-add-a-reader/            Pair a meter reader over BLE (SensorScan / SensorBind / Sensor) — verified
-open_obi_energy_meter/      Standalone ESP32 + SX1262 firmware that REPLACES the bridge (web + MQTT + reader OTA)
-firmware/                   Loader script + IDA notes (no vendor binaries — dump your own)
+0 ms        OBI-Beacon (LoRa 869,5 MHz), dann OBI-Hörfenster (300 ms, verlängert sich bei OBI-Verkehr)
+~300 ms     Umschalten (~1–2 ms, ohne Chip-Reset) auf einen Empfänger:
+              wM-Bus T1/C1 (868,95 MHz) jede zweite Sekunde,
+              sonst reihum: wM-Bus S1, Bresser, LaCrosse (868,3 MHz), LoRaWAN (Kanäle/SF reihum)
+970 ms      zurück auf LoRa; läuft gerade ein Telegramm, wird bis zu 25 ms gewartet
 ```
 
-## Quick starts
+Komplett auf OBI bleibt der Chip in diesen Fällen:
+- beim Koppeln eines Lesekopfs, beim Lesekopf-Update und im „Alle binden“-Fenster
+- in den ersten 2 Minuten nach dem Start
+- rund um jeden fälligen Zählerstand eines Lesekopfs
 
-- **Own cloud:** [`04-connect-your-own-cloud/README.md`](04-connect-your-own-cloud/README.md)
-- **Decode BLE traffic:** [`06-tools/obi_ble_codec.py`](06-tools/obi_ble_codec.py) + [tools README](06-tools/README.md)
-- **Read/write UART config in the browser:** open [`06-tools/obi_uart_config.html`](06-tools/obi_uart_config.html) in Chrome/Edge
-- **Load your own firmware dump in IDA:** [`firmware/README.md`](firmware/README.md)
+Je weniger Empfänger aktiv sind (Tab **Empfang**), desto öfter kommt jeder dran. Funk-Zähler wiederholen ihre Daten
+ständig, Heizkostenverteiler etwa alle paar Minuten, deshalb kommt trotz Zeitteilung jeder Wert an. Rauchmelder
+senden teils nur wenige Male am Tag. Bis ein Rauchmelder auftaucht, kann es deshalb dauern.
 
-## Firmware coverage & status → [STATUS.md](STATUS.md)
-- **Covers:** bridge **1.0.0–1.2.1** and **31.0.0–34.0.0**; protocol details are from **1.0.2**, verified
-  consistent across versions.
-- 🔒 **No vendor firmware binaries are included** (SUMEC/OBI copyright) — dump the image from a device you
-  own; see [firmware/README.md](firmware/README.md).
-- ⚠️ **Firmware can change** — a future OTA may alter ids/payloads or add crypto. Re-verify on your unit.
-- **OTA is still unsigned** in the newest analyzed version (integrity hash only, no secure-boot signature) —
-  which is what makes custom firmware via your own cloud possible. This could change.
-- ✅ **Energy data over MQTT is decoded** — JSON telemetry confirmed on a live device (meter readings on
-  `EnergyTrackingSensor/.../state`; schema in [cloud-api.md](03-reverse-engineering/cloud-api.md#telemetry-payloads-decoded--confirmed-on-a-live-device)).
-- ✅ **Talking to the bridge over MQTT is done** — the downlink/command path is fully reversed & verified:
-  change the reader **upload interval** (`mqtts_server.py --set-interval N`) and **push firmware over OTA**
-  (`mqtts_server.py --ota-firmware fw.bin` — unsigned self-update, so a real custom-firmware path; see
-  [flash firmware](04-connect-your-own-cloud/README.md#flash-your-own-firmware) /
-  [OTA protocol](03-reverse-engineering/cloud-api.md#ota)). Full coverage in [STATUS.md](STATUS.md).
+## MQTT / Home Assistant
 
-## Security posture (factual summary)
-The BLE control channel uses **TEA** (single 16-byte key per device, and that key is also retrievable from
-the vendor cloud with just a login + the BLE name — no ownership check). The **LoRa energy payload is
-TEA-encrypted with a per-device ECDH-derived key on both reader generations** — the old readers (cloud
-firmware `1.0.1`, softver `32`/"v32") do the same ECDH → TEA-ECB as `1.2.x`; only the frame layout differs
-(an earlier "old readers are single-byte-XOR only" claim was **wrong**, corrected after building the ESP32
-gateway). The single-byte XOR is only an outer frame obfuscation. The plaintext **UART config channel can read/write
-the TEA key and WiFi credentials**. Details and impact are in
-[03-reverse-engineering](03-reverse-engineering/). These notes exist so owners can secure and self-host their units.
+Das Basis-Topic ist dasselbe wie in OpenOBI (Einstellungen → MQTT).
 
-## License
-This repo's own code, documentation, and tooling are licensed under the **[PolyForm Noncommercial 1.0.0](LICENSE)**
-license — free to use, modify, and share for any noncommercial purpose; commercial use or resale is not
-permitted. Vendor firmware/binaries referenced but not distributed here remain their rights holders' property
-— see [DISCLAIMER.md](DISCLAIMER.md).
+| Topic | Inhalt |
+|---|---|
+| `<base>/wmbus/<HERSTELLER><ID>` | `{"rssi","count","last_seen","id","mfr","type","mode","decryption","v":{…}}` |
+| `<base>/weather/<protokoll>-<id>` | `{"rssi","count","last_seen","channel","v":{"temperature","humidity",…}}` |
+| `<base>/lorawan/<DevAddr>` | `{"rssi","count","last_seen","fcnt","fport","snr","sf","freq","v":{…}}` |
+| `…/status` | `online` / `offline` (nach einstellbarer Zeit ohne Empfang, Standard 26 h) |
+| `homeassistant/device/obiu_…/config` | HA-Geräte-Discovery: ein Gerät mit allen Sensoren |
+
+Beispiel, dein Qundis-Wasserzähler:
+
+```json
+{"rssi":-111,"count":12,"last_seen":"2026-11-12T17:03:11Z","id":"13682041","mfr":"QDS","type":"Wasserzähler",
+ "mode":"C1a","decryption":"plain",
+ "v":{"volume":104.505,"date_s1":"2025-12-31","volume_s1":86.837,"date_s2":"2026-10-31","volume_s2":103.717,
+      "volume_since_due":17.668,"datetime":"2026-11-12T17:03"}}
+```
+
+Die Werte haben feste Einheiten: kWh, m³, °C, W, mm. Gerätklassen und State-Classes sind gesetzt, Wasser-, Gas-
+und Wärmezähler erscheinen deshalb direkt im HA-Energie-Dashboard. Schaltest du ein Gerät ab oder vergisst es,
+entfernt die Firmware es auch aus Home Assistant. Voraussetzung ist **Home Assistant 2024.11 oder neuer**
+(MQTT-Geräte-Discovery).
+
+## Entwicklung
+
+```bash
+cd obiunlocked
+pip install pytest pycryptodome          # OpenSSL-Header nötig (macOS: brew install openssl)
+python -m pytest tests/test_wmbus.py tests/test_radio_cores.py
+```
+
+Die Decoder sind plattformunabhängig und werden auf dem Rechner getestet. Grundlage sind:
+- Referenz-Telegramme aus wmbusmeters und rtl_433
+- ein echtes Qundis-Telegramm
+- ein unabhängiger Python-Encoder (AES, CMAC, CRC, 3-aus-6, Manchester)
+
+| Datei | Aufgabe |
+|---|---|
+| `src/wmbus_core.cpp` | wM-Bus: T1/C1/S1, CRC, ELL/AFL/TPL, AES Mode 5/7, DIF/VIF, Hersteller-Formate, Interpretation |
+| `src/wx_core.cpp` | LaCrosse IT+, Bresser 5/6/7-in-1 |
+| `src/lorawan_core.cpp` | LoRaWAN-Uplinks: Parsing, MIC, Entschlüsselung, Cayenne LPP |
+| `src/unl.cpp` | Gerätelisten, Telegramm-Cache, NVS, Web-API `/api/unl*`, MQTT + HA |
+| `src/main.cpp` (Abschnitt *shared-radio scheduler*) | Zeitscheiben des Funkchips |
+| `web/index.html` | Dashboard |
+
+**Speicher:** Das Radio-Log nutzt einen gemeinsamen 4-KB-Puffer statt fester 15 KB, und es gibt 16 statt
+64 Lesekopf-Plätze. Dadurch liegt der feste RAM-Bedarf (~89 KB) trotz der neuen Funktionen auf dem Niveau des
+Originals.
+
+Updates aus OpenOBI übernehmen:
+
+```bash
+git fetch upstream
+git merge upstream/main
+```
+
+Die automatische GitHub-Update-Prüfung von OpenOBI ist hier **aus**, solange unter Einstellungen → Firmware kein
+Repository eingetragen ist. Ein OpenOBI-Release würde sonst ObiUnlocked überschreiben.
+
+## Grenzen
+
+- Die Zeitscheiben-Steuerung ist auf echter Hardware noch wenig erprobt. Fehlen OBI-Werte, das Hörfenster erhöhen
+  oder Empfänger abschalten.
+- Nicht unterstützt:
+  - wM-Bus mit ELL-Verschlüsselung (CI 0x8D/0x8F)
+  - Kamstrup-Kompakttelegramme
+  - Telegramme über ~170 Byte (T1)
+- Bresser 6-in-1 und 7-in-1 sind nach rtl_433 umgesetzt, aber nicht mit echter Hardware geprüft.
+- LoRaWAN: Pro Zeitscheibe wird nur ein Kanal mit einem SF gehört. SF11/12 geht nur ohne OBI.
+- Speicherplätze: 80 wM-Bus-, 16 Wetter- und 24 LoRaWAN-Geräte. Ist die Liste voll, ersetzt die Firmware das am
+  längsten stumme Gerät ohne Auswahl und ohne Namen.

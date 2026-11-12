@@ -72,12 +72,12 @@ static SetupApWindow g_apWindow;
 static bool          g_apLimit   = false;   // opt-in: setup AP only inside g_apWindow (NVS "obigw"/"aplim")
 static volatile bool g_mqttUp    = false;   // cached mqtt.connected() — read by the e-paper task (no cross-task PubSubClient)
 
-// Per-device setup-AP name: "OpenOBI-XXXXXX" (last 3 MAC bytes) so two gateways in setup mode don't clash.
+// Per-device setup-AP name: "ObiUnlocked-XXXXXX" (last 3 MAC bytes) so two gateways in setup mode don't clash.
 static const char *apSsid() {
   static char ssid[20];
   if (!ssid[0]) {
     uint8_t mac[6]; esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    snprintf(ssid, sizeof ssid, "OpenOBI-%02X%02X%02X", mac[3], mac[4], mac[5]);
+    snprintf(ssid, sizeof ssid, "ObiUnlocked-%02X%02X%02X", mac[3], mac[4], mac[5]);
   }
   return ssid;
 }
@@ -113,7 +113,7 @@ static char     g_ntp[64] = "pool.ntp.org";                // NTP server for the
 static volatile bool g_nightMode = false;                    // disable normal-operation LED activity
 static bool g_hideUnbound = false;                           // dashboard: hide unbound (pending) reader cards (persisted, NVS "obigw"/"hideunb")
 // User-settable friendly display name for the GATEWAY itself (Tasmota-style: blank = fall back to the
-// technical default "OBI Gateway <gwId>"), mirroring the existing per-reader r.name. Used as the HA device
+// technical default "ObiUnlocked <gwId>"), mirroring the existing per-reader r.name. Used as the HA device
 // name in publishGatewayDiscovery(); the technical default stays available too (gateway state JSON "gw_name"
 // field + a dedicated "Original name" HA sensor, mirroring the reader's "ID" sensor) so a renamed gateway can
 // still always be matched back to its physical identity. Persisted under NVS "obigw"/"gwname".
@@ -129,7 +129,7 @@ static uint16_t g_pubEvery = 15;   // gateway-state publish cadence (s); reader 
 static char     g_authUser[32] = "";
 static char     g_authPass[64] = "";
 
-// Password for the setup/config-portal AP itself ("OpenOBI-XXXXXX"), NOT the web dashboard login above.
+// Password for the setup/config-portal AP itself ("ObiUnlocked-XXXXXX"), NOT the web dashboard login above.
 // Default blank = open hotspot (unchanged behavior). WiFiManager requires 8-63 chars if set (WPA2 minimum);
 // validated in handleApPassword() before it's ever handed to softAP()/WiFiManager.
 static char     g_apPass[64] = "";
@@ -595,7 +595,7 @@ static void handleName() {
 }
 
 // Set (or clear, empty name) the GATEWAY's own friendly display name (mirrors handleName() for readers).
-// Used as the HA device name; the technical default ("OBI Gateway <gwId>") stays published separately and
+// Used as the HA device name; the technical default ("ObiUnlocked <gwId>") stays published separately and
 // unconditionally on every gateway state update (see the "gw_name" field in mqttService()) plus a dedicated
 // "Original name" HA sensor mirroring the reader's "ID" sensor, so a rename never loses track of which
 // physical gateway this is.
@@ -721,7 +721,7 @@ static void handleAuthCfg() {
   server.send(200, "application/json", "{\"ok\":true}");
 }
 
-// ---- /api/appass — set the setup-hotspot ("OpenOBI-XXXXXX") password -----------------------------------
+// ---- /api/appass — set the setup-hotspot ("ObiUnlocked-XXXXXX") password -----------------------------------
 // Blank clears it back to an open AP. WiFiManager itself requires 8-63 chars for a non-blank AP password
 // (WPA2 minimum) and silently falls back to open otherwise (see validApPassword() in the library) -- reject
 // short-but-nonempty passwords here instead, so the UI gets an error rather than a password that's quietly
@@ -1012,7 +1012,7 @@ static bool githubLatest(String &tag, String &url, int *codeOut = nullptr) {
   if (!g_ghRepo[0]) return false;
 #endif
   WiFiClientSecure cli; cli.setInsecure();
-  HTTPClient http; http.setUserAgent("OBI-Gateway");
+  HTTPClient http; http.setUserAgent("ObiUnlocked");
   http.setConnectTimeout(9000); http.setTimeout(12000);
   http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
   if (!http.begin(cli, ghApiUrl())) return false;
@@ -1113,7 +1113,7 @@ static void ghOtaTask(void *) {
   if (!githubLatest(tag, url) || !url.length()) { delay(1500); githubLatest(tag, url); }
   if (url.length()) {
     std::unique_ptr<WiFiClientSecure> cli;   // see resolveAndGet(): a FRESH one every attempt, on purpose
-    HTTPClient http; http.setUserAgent("OBI-Gateway");
+    HTTPClient http; http.setUserAgent("ObiUnlocked");
     http.setConnectTimeout(10000); http.setTimeout(20000);
     static const char *kLocationHdr[] = {"Location"};
     http.collectHeaders(kLocationHdr, 1);
@@ -1568,8 +1568,7 @@ static void handleDebugPage() { sendGzipHtml(server, DEBUG_HTML_GZ); }
 // asked for — the per-day consumption from the kWh-COUNTER deltas (day[i].import - day[i-1].import),
 // because the Watt reading is not always sent by the meter and can't be trusted; Watt is only tabled.
 // All file I/O runs on the web task (core 0), never on the LoRa loop.
-#define HIST_SLOTS 64                   // must stay >= MAX_READERS (defined in main.cpp; it's an extern const,
-                                        // so it can't size a static array here)
+#define HIST_SLOTS OBI_MAX_READERS      // one history slot per reader slot (see reader.h)
 // No global price setting: every reader has its own (Reader.priceCentOverride/exportCentOverride in
 // reader.h), editable from the History page's header once that reader is selected. These two literals are
 // only the bootstrap default shown/used for a reader that has never had its own price saved yet -- see
@@ -2820,7 +2819,7 @@ static void handleWifiConnect() {
 }
 
 // Launch the WiFiManager config portal on demand (from webTask). Frees port 80 for WiFiManager, runs the
-// portal (blocking, 3-min timeout) on the 'OpenOBI-<MAC>' AP, then brings our dashboard back up. Works
+// portal (blocking, 3-min timeout) on the 'ObiUnlocked-<MAC>' AP, then brings our dashboard back up. Works
 // both when unconfigured (already in AP mode) and when connected (lets you re-point WiFi/MQTT anytime).
 static void runPortal() {
   Serial.printf("[web] opening WiFi config portal on AP '%s' (192.168.4.1)\n", apSsid());
@@ -3095,10 +3094,10 @@ static void publishGatewayDiscovery() {
   String uid = "obi_gw_" + String(gwId());
   String stt = gwStateTopic();
   String avt = avtTopic();
-  String origName = "OBI Gateway " + String(gwId());   // technical default; also always sent as "gw_name" below
+  String origName = "ObiUnlocked " + String(gwId());   // technical default; also always sent as "gw_name" below
   String dev = "\"dev\":{\"ids\":[\"" + uid + "\"],\"name\":" +
                (g_gwName[0] ? jstr(g_gwName) : ("\"" + origName + "\"")) +
-               ",\"mf\":\"Open OBI\",\"mdl\":\"LoRa Gateway (" + String(FW_BUILD_TARGET) +
+               ",\"mf\":\"ObiUnlocked\",\"mdl\":\"LoRa Gateway (" + String(FW_BUILD_TARGET) +
                ")\",\"sw\":\"" + String(FW_VERSION) + " (" + String(FW_GIT_HASH) +
                ")\",\"hw\":\"" + String(gwMac()) + "\"}";
   String availa = ",\"avty_t\":\"" + avt + "\"";
@@ -3169,7 +3168,7 @@ static void publishGatewayDiscovery() {
   { String t = "homeassistant/update/" + uid + "/firmware/config";
     String p = "{\"name\":\"Firmware update\",\"uniq_id\":\"" + uid + "_fw_update\",\"stat_t\":\"" + updTopic() +
                "\",\"cmd_t\":\"" + installTopic() + "\",\"pl_inst\":\"install\",\"dev_cla\":\"firmware\""
-               ",\"title\":\"Open OBI gateway firmware\",\"ent_cat\":\"config\"" + availa + "," + dev + "}";
+               ",\"title\":\"ObiUnlocked firmware\",\"ent_cat\":\"config\"" + availa + "," + dev + "}";
     mqtt.publish(t.c_str(), p.c_str(), true); }
 }
 
@@ -3222,7 +3221,7 @@ static void mqttService() {
   if (g_mqttHost[0] && !mqtt.connected() && (g_mqttReconnect || now - lastTry > 8000)) {
     g_mqttReconnect = false;
     lastTry = now;
-    String cid = "obi-gw-" + String(gwId());                    // unique client id per gateway
+    String cid = "obiunlocked-" + String(gwId());                    // unique client id per gateway
     String avt = avtTopic();                                    // per-gateway availability (LWT) topic
     if (mqtt.connect(cid.c_str(), g_mqttUser[0] ? g_mqttUser : nullptr, g_mqttPass[0] ? g_mqttPass : nullptr,
                      avt.c_str(), 0, true, "offline")) {          // broker publishes "offline" if we drop
@@ -3277,7 +3276,7 @@ static void mqttService() {
         for (int i = 0; i < MAX_READERS; i++) if (readers[i].used) { rcAll++; if (readers[i].assigned) rcBound++; }
         float t = gwTempC();
         String gp = "{\"mac\":\"" + String(gwMac()) + "\",\"gw\":\"" + String(gwId()) + "\""
-                    ",\"gw_name\":\"OBI Gateway " + String(gwId()) + "\"" +   // original/technical name -- ALWAYS sent, even after a custom rename (see publishGatewayDiscovery's "dev.name")
+                    ",\"gw_name\":\"ObiUnlocked " + String(gwId()) + "\"" +   // original/technical name -- ALWAYS sent, even after a custom rename (see publishGatewayDiscovery's "dev.name")
                     ",\"temp_c\":" + (isnan(t) ? String("null") : String(t, 1)) +
                     ",\"uptime_s\":" + String(gw_uptime_s()) +
                     ",\"heap_free\":" + String(ESP.getFreeHeap()) +
@@ -3424,7 +3423,7 @@ static void epdRender() {
   epd.firstPage();
   do {
     epd.fillScreen(GxEPD_WHITE);
-    epd.setTextSize(2); epd.setCursor(2, 2);   epd.print("Open OBI Energy Tracker");
+    epd.setTextSize(2); epd.setCursor(2, 2);   epd.print("ObiUnlocked");
     epd.setTextSize(1);
     epd.drawFastHLine(0, 20, epd.width(), GxEPD_BLACK);
     epd.setCursor(2, 25);

@@ -70,7 +70,7 @@ Decrypt: `sum` starts `0xC6EF3720`, subtract per round. Reference implementation
 
 ## The TEA key
 16 bytes, **one per bridge**. Not derived on-device — it is **provisioned** and stored in NVS
-(key `tea_key`). Two ways an owner can obtain it (see main [README](../README.md)):
+(key `tea_key`). Two ways an owner can obtain it (see main [README](../OPENOBI.md)):
 1. authorized account via the app's challenge endpoint, or
 2. straight off UART0 with the config protocol ([uart-config-protocol.md](uart-config-protocol.md)).
 
