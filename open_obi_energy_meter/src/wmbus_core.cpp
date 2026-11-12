@@ -13,6 +13,7 @@ const char *modeName(uint8_t mode) {
     case MODE_T1: return "T1";
     case MODE_C1A: return "C1a";
     case MODE_C1B: return "C1b";
+    case MODE_S1: return "S1";
     default: return "?";
   }
 }
@@ -110,6 +111,35 @@ RadioResult fromRadio(const uint8_t *raw, size_t rawLen, Frame &f) {
   if (n < 12) return n < 2 ? RR_BAD_3OF6 : RR_TOO_SHORT;
   f.mode = MODE_T1;
   return stripFormatA(dec, n, f);
+}
+
+size_t decodeManchester(const uint8_t *in, size_t inLen, uint8_t *out, size_t outMax, bool invert) {
+  size_t n = 0, bits = inLen * 8;
+  for (size_t pos = 0; n < outMax && pos + 16 <= bits; n++) {
+    uint8_t b = 0;
+    for (int k = 0; k < 8; k++, pos += 2) {
+      int c0 = (in[pos >> 3] >> (7 - (pos & 7))) & 1, c1 = (in[(pos + 1) >> 3] >> (7 - ((pos + 1) & 7))) & 1;
+      if (c0 == c1) return n;
+      b = (uint8_t)((b << 1) | (c0 ^ (invert ? 1 : 0)));
+    }
+    out[n] = b;
+  }
+  return n;
+}
+
+RadioResult fromRadioS1(const uint8_t *raw, size_t rawLen, Frame &f) {
+  uint8_t dec[FRAME_MAX];
+  RadioResult best = RR_BAD_3OF6;
+  for (int inv = 0; inv < 2; inv++) {
+    f = Frame();
+    size_t n = decodeManchester(raw, rawLen, dec, sizeof dec, inv != 0);
+    if (n < 12) continue;
+    f.mode = MODE_S1;
+    RadioResult r = stripFormatA(dec, n, f);
+    if (r == RR_OK) return r;
+    if (r == RR_BAD_CRC || best == RR_BAD_3OF6) best = r;   // most telling error: CRC > too short > coding
+  }
+  return best;
 }
 
 // ============================================================================ link / transport layer
@@ -373,6 +403,13 @@ static const QuantityInfo Q_INFO[Q_COUNT_] = {
   /* Q_BATTERY_DAYS       */ { "battery_days", "d", "duration", "measurement" },
   /* Q_HUMIDITY           */ { "humidity", "%", "humidity", "measurement" },
   /* Q_MFR_SPECIFIC       */ { "mfr_data", "", nullptr, nullptr },
+  /* Q_ROOM_TEMP          */ { "room_temp", "°C", "temperature", "measurement" },
+  /* Q_RADIATOR_TEMP      */ { "radiator_temp", "°C", "temperature", "measurement" },
+  /* Q_BATTERY_YEARS      */ { "battery_years", "a", nullptr, "measurement" },
+  /* Q_TX_PERIOD          */ { "transmit_period", "s", "duration", nullptr },
+  /* Q_STATUS             */ { "status", "", nullptr, nullptr },
+  /* Q_DUST               */ { "dust_level", "", nullptr, "measurement" },
+  /* Q_CONSUMPTION        */ { "consumption", "", nullptr, "total_increasing" },
 };
 
 const QuantityInfo &quantityInfo(uint8_t q) { return Q_INFO[q < Q_COUNT_ ? q : 0]; }
@@ -441,6 +478,7 @@ static void mapVif(uint8_t table, uint8_t c, uint8_t &q, double &mult) {
 }
 
 void recordKey(const Record &r, char *out, size_t outMax) {
+  if (r.key) { snprintf(out, outMax, "%s", r.key); return; }
   const QuantityInfo &qi = quantityInfo(r.quantity);
   int k;
   if (r.quantity == Q_UNKNOWN) {
@@ -517,9 +555,10 @@ int parseRecords(const uint8_t *p, size_t n, RecordSink sink, void *ctx) {
       i += 1 + p[i];
     }
     r.vif = code;
-    for (int e = 0; b & 0x80; e++) {                           // combinable VIFE chain (skipped)
+    for (int e = 0; b & 0x80; e++) {                           // combinable VIFE chain (first one kept)
       if (i >= n || e >= 10) return -1;
       b = p[i++];
+      if (e == 0) r.vife0 = b;
     }
     size_t len;
     uint8_t df = dif & 0x0F;
@@ -587,6 +626,276 @@ int parseRecords(const uint8_t *p, size_t n, RecordSink sink, void *ctx) {
     count++;
   }
   return count;
+}
+
+}   // namespace wmb
+
+// ============================================================================ manufacturer-specific formats
+namespace wmb {
+
+static uint16_t packMfr(const char *c) {
+  return (uint16_t)(((c[0] - 64) << 10) | ((c[1] - 64) << 5) | (c[2] - 64));
+}
+static uint32_t be32(const uint8_t *p) {
+  return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
+}
+static void emitNum(RecordSink sink, void *ctx, uint8_t q, double v, uint32_t storage = 0) {
+  Record r;
+  r.quantity = q; r.kind = VK_NUMBER; r.value = v; r.storage = storage;
+  sink(r, ctx);
+}
+static void emitDate(RecordSink sink, void *ctx, uint16_t y, uint8_t m, uint8_t d, uint32_t storage) {
+  if (m < 1 || m > 12 || d < 1 || d > 31) return;
+  Record r;
+  r.quantity = Q_DATE; r.kind = VK_DATE; r.year = y; r.month = m; r.day = d; r.storage = storage;
+  sink(r, ctx);
+}
+
+// ---- Diehl IZAR / PRIOS: LFSR-scrambled with a key derived from two public default keys and the header
+static bool isIzar(const Frame &f, const Header &h) {
+  return (h.mfr == packMfr("SAP") || h.mfr == packMfr("DME") || h.mfr == packMfr("HYD")) &&
+         h.ci >= 0xA0 && h.ci <= 0xA3 && !h.hasTpl && f.len >= 26;
+}
+static bool izarDescramble(const Frame &f, uint32_t key, uint8_t *out, size_t &outLen) {
+  const uint8_t *d = f.data;   // d[0] = L field
+  key ^= be32(d + 2);          // manufacturer + address[0..1]
+  key ^= be32(d + 6);          // address[2..3] + version + type
+  key ^= be32(d + 10);         // CI + first header bytes
+  outLen = f.len - 15;
+  for (size_t i = 0; i < outLen; i++) {
+    for (int j = 0; j < 8; j++) {
+      uint32_t bit = ((key >> 1) ^ (key >> 2) ^ (key >> 11) ^ (key >> 31)) & 1;
+      key = (key << 1) | bit;
+    }
+    out[i] = (uint8_t)(d[i + 15] ^ (key & 0xFF));
+    if (i == 0 && out[0] != 0x4B) return false;   // check byte
+  }
+  return true;
+}
+static int decodeIzar(const Frame &f, RecordSink sink, void *ctx) {
+  static const uint32_t KEYS[2] = { 0x39BC8A10u ^ 0xE66D83F8u, 0x51728910u ^ 0xE66D83F8u };
+  uint8_t dec[FRAME_MAX];
+  size_t n = 0;
+  bool ok = false;
+  for (uint32_t k : KEYS) if ((ok = izarDescramble(f, k, dec, n))) break;
+  if (!ok || n < 11) return -1;
+  const uint8_t *d = f.data;
+  uint32_t total = (uint32_t)dec[1] | ((uint32_t)dec[2] << 8) | ((uint32_t)dec[3] << 16) | ((uint32_t)dec[4] << 24);
+  uint32_t last = (uint32_t)dec[5] | ((uint32_t)dec[6] << 8) | ((uint32_t)dec[7] << 16) | ((uint32_t)dec[8] << 24);
+  uint16_t y = (uint16_t)(((dec[10] & 0xF0) >> 1) + ((dec[9] & 0xE0) >> 5));
+  y = (uint16_t)(y > 80 ? 1900 + y : 2000 + y);
+  emitNum(sink, ctx, Q_VOLUME, total / 1000.0);
+  emitNum(sink, ctx, Q_VOLUME, last / 1000.0, 1);
+  emitDate(sink, ctx, y, dec[10] & 0x0F, dec[9] & 0x1F, 1);
+  emitNum(sink, ctx, Q_BATTERY_YEARS, (d[12] & 0x1F) / 2.0);
+  emitNum(sink, ctx, Q_TX_PERIOD, (double)(1u << ((d[11] & 0x0F) + 2)));
+  return 5;
+}
+
+// ---- Techem: [0] status [1..2] period-start date [3..4] previous-period value [5..6] current date
+//      [7..8] current value (then room/radiator temperature x100 on FHKV data III v0x69)
+static bool isTechem(const Header &h) {
+  return h.mfr == packMfr("TCH") && (h.ci == 0xA0 || h.ci == 0xA2) && !h.hasTpl;
+}
+static bool techemWater(uint8_t type) { return type == 0x62 || type == 0x72 || type == 0x06 || type == 0x07 || type == 0x15 || type == 0x16; }
+static int decodeTechem(const Frame &f, const Header &h, RecordSink sink, void *ctx) {
+  const uint8_t *c = f.data + h.apOff;
+  if (h.apLen < 9) return -1;
+  uint16_t dPrev = (uint16_t)(c[1] | (c[2] << 8)), dCurr = (uint16_t)(c[5] | (c[6] << 8));
+  uint8_t pDay = dPrev & 0x1F, pMon = (dPrev >> 5) & 0x0F;
+  uint16_t pYear = (uint16_t)(2000 + ((dPrev >> 9) & 0x3F));
+  uint8_t cDay = (dCurr >> 4) & 0x1F, cMon = (dCurr >> 9) & 0x0F;
+  if (!cDay) cDay = 1;
+  if (!cMon) cMon = 12;
+  uint16_t cYear = (cMon < pMon || (cMon == pMon && cDay <= pDay)) ? pYear + 1 : pYear;
+  uint16_t prev = (uint16_t)(c[3] | (c[4] << 8)), curr = (uint16_t)(c[7] | (c[8] << 8));
+  int n = 0;
+  if (h.type == 0x80) {                                   // heat cost allocator
+    emitNum(sink, ctx, Q_HCA, curr); n++;
+    emitNum(sink, ctx, Q_HCA, prev, 1); n++;
+    if (h.ver == 0x69 && h.apLen >= 13) {
+      emitNum(sink, ctx, Q_ROOM_TEMP, (uint16_t)(c[9] | (c[10] << 8)) / 100.0); n++;
+      emitNum(sink, ctx, Q_RADIATOR_TEMP, (uint16_t)(c[11] | (c[12] << 8)) / 100.0); n++;
+    }
+  } else if (techemWater(h.type)) {                        // water: current = consumption since period start
+    emitNum(sink, ctx, Q_VOLUME, (prev + curr) / 10.0); n++;
+    emitNum(sink, ctx, Q_VOLUME, prev / 10.0, 1); n++;
+  } else {
+    return -2;
+  }
+  emitDate(sink, ctx, cYear, cMon, cDay, 0);
+  emitDate(sink, ctx, pYear, pMon, pDay, 1);
+  return n + 2;
+}
+
+const char *manufacturerDecoderName(const Frame &f, const Header &h) {
+  if (isIzar(f, h)) return "izar";
+  if (isTechem(h)) return h.type == 0x80 ? "techem_hca" : techemWater(h.type) ? "techem_water" : nullptr;
+  return nullptr;
+}
+
+int decodeManufacturer(const Frame &f, const Header &h, RecordSink sink, void *ctx) {
+  if (isIzar(f, h)) return decodeIzar(f, sink, ctx);
+  if (isTechem(h)) return decodeTechem(f, h, sink, ctx);
+  return -2;
+}
+
+}   // namespace wmb
+
+// ============================================================================ interpretation layer
+namespace wmb {
+
+const char *statusText(uint8_t st) {
+  if (st & 0x08) return "Dauerhafter Fehler";
+  if (st & 0x04) return "Batterie schwach";
+  if (st & 0x10) return "Vorübergehender Fehler";
+  switch (st & 0x03) {
+    case 1: return "Beschäftigt";
+    case 2: return "Anwendungsfehler";
+    case 3: return "Ungewöhnlicher Zustand";
+  }
+  return "OK";
+}
+
+struct Interp {
+  RecordSink sink; void *ctx;
+  const Header *h;
+  bool smoke;
+  bool haveCur[3] = {false, false, false}, haveDue[3] = {false, false, false};
+  double cur[3] = {0, 0, 0}, due[3] = {0, 0, 0};
+  int count = 0;
+};
+static int qslot(uint8_t q) { return q == Q_VOLUME ? 0 : q == Q_ENERGY ? 1 : q == Q_HCA ? 2 : -1; }
+
+static void out(Interp &x, Record &r) {
+  int k = qslot(r.quantity);
+  if (k >= 0 && r.kind == VK_NUMBER && !r.function && !r.tariff && !r.subunit) {
+    if (r.storage == 0 && !x.haveCur[k]) { x.haveCur[k] = true; x.cur[k] = r.value; }
+    if (r.storage == 1 && !x.haveDue[k]) { x.haveDue[k] = true; x.due[k] = r.value; }
+  }
+  x.sink(r, x.ctx);
+  x.count++;
+}
+
+static uint32_t bcdLE(const uint8_t *p, int n, bool &ok) {
+  uint32_t v = 0;
+  ok = true;
+  for (int i = n - 1; i >= 0; i--) {
+    if ((p[i] >> 4) > 9 || (p[i] & 0x0F) > 9) ok = false;
+    v = v * 100 + (p[i] >> 4) * 10 + (p[i] & 0x0F);
+  }
+  return v;
+}
+static bool dateG(const uint8_t *b, Record &r) {
+  if (b[0] == 0xFF && b[1] == 0xFF) return false;
+  r.kind = VK_DATE;
+  r.day = b[0] & 0x1F; r.month = b[1] & 0x0F;
+  r.year = (uint16_t)(2000 + (((b[0] & 0xE0) >> 5) | ((b[1] & 0xF0) >> 1)));
+  return r.month >= 1 && r.month <= 12 && r.day >= 1;
+}
+
+// Qundis walk-by blob (DIF 0D, VIF FF 5F, 53 bytes): [8] meter kind (C1 water / B0 HCA), [10..11] error date,
+// [12..15] current, [16..17]+[18..21] year-end due date + reading, [22..23]+[24..27] month-end + reading.
+static bool qundisBlob(Interp &x, const Record &src) {
+  const uint8_t *b = src.raw;
+  if (src.rawLen != 53 || b[0] != 0x00 || b[1] != 0x82 || b[3] != 0x00 || b[4] != 0x00) return false;   // [4]=0x35: encrypted
+  bool water = b[8] == 0xC1, hca = b[8] == 0xB0;
+  if (!water && !hca) return false;
+  uint8_t q = water ? Q_VOLUME : Q_HCA;
+  double scale = water ? 0.001 : 1;
+  bool ok;
+  Record r;
+  r.quantity = q; r.kind = VK_NUMBER;
+  r.value = bcdLE(b + 12, 4, ok) * scale; r.label = water ? "Zählerstand" : "Verbrauchseinheiten aktuell";
+  if (ok) out(x, r);
+  static const char *DL[2] = { "Stichtag (Jahr)", "Stichtag (Monat)" };
+  static const char *VL[2][2] = { { "Stand am Jahresstichtag", "Stand am Monatsstichtag" },
+                                  { "Einheiten am Jahresstichtag", "Einheiten am Monatsstichtag" } };
+  for (int k = 0; k < 2; k++) {
+    Record d;
+    d.quantity = Q_DATE; d.storage = (uint32_t)(k + 1); d.label = DL[k];
+    if (dateG(b + 16 + 6 * k, d)) out(x, d);
+    Record v;
+    v.quantity = q; v.kind = VK_NUMBER; v.storage = (uint32_t)(k + 1); v.label = VL[hca][k];
+    v.value = bcdLE(b + 18 + 6 * k, 4, ok) * scale;
+    if (ok) out(x, v);
+  }
+  Record e;
+  e.quantity = Q_DATE; e.function = 3; e.label = "Fehlerdatum";
+  if (dateG(b + 10, e)) out(x, e);
+  return true;
+}
+
+// Ei Electronics smoke detector head record (DIF 84 40, VIF FF 2C): dust, battery, head status bits.
+static bool eiHead(Interp &x, const Record &src) {
+  if (src.rawLen != 4) return false;
+  uint32_t v = (uint32_t)src.raw[0] | ((uint32_t)src.raw[1] << 8) | ((uint32_t)src.raw[2] << 16) | ((uint32_t)src.raw[3] << 24);
+  Record d;
+  d.quantity = Q_DUST; d.kind = VK_NUMBER; d.value = v & 0x1F; d.label = "Verschmutzung (0-31)";
+  out(x, d);
+  Record bv;
+  bv.quantity = Q_VOLTAGE; bv.kind = VK_NUMBER; bv.value = 2.25 + ((v >> 8) & 0x0F) * 0.05; bv.label = "Batteriespannung";
+  bv.key = "battery_voltage";
+  out(x, bv);
+  static const struct { uint32_t bit; const char *txt; } F[] = {
+    { 0x2000000, "Melder vollständig abgedeckt" }, { 0x1000000, "Hindernis erkannt" },
+    { 0x2000, "Rauchsensor defekt" }, { 0x1000, "Batterie schwach" }, { 0x20, "Signalgeber defekt" },
+    { 0x40, "Manipulation während Demontage" }, { 0x80, "Lebensdauer erreicht" },
+    { 0x8000, "Lebensdauer endet in 12 Monaten" }, { 0x4000, "Hinderniserkennung defekt" },
+    { 0x40000, "Kommunikationsfehler Melderkopf" }, { 0x80000, "Funkstörung" }, { 0x20000, "Umgebung verändert" },
+  };
+  const char *txt = (v & 0x1F) >= 28 ? "Reinigung empfohlen" : "OK";
+  for (auto &f : F) if (v & f.bit) { txt = f.txt; break; }
+  Record s;
+  s.quantity = Q_STATUS; s.kind = VK_STRING; s.text = txt; s.label = "Melderstatus"; s.key = "head_status";
+  out(x, s);
+  return true;
+}
+
+static void interpSink(const Record &rin, void *ctx) {
+  Interp &x = *(Interp *)ctx;
+  Record r = rin;
+  if (r.quantity == Q_MFR_SPECIFIC && r.dif == 0x0D && r.vife0 == 0x5F &&
+      (x.h->meterMfr() == 0x4493 /*QDS*/ || x.h->meterMfr() == 0x3265 /*LSE*/) && qundisBlob(x, r))
+    return;
+  if (r.quantity == Q_MFR_SPECIFIC && r.vife0 == 0x2C && x.h->meterMfr() == 0x1525 /*EIE*/ && eiHead(x, r)) return;
+  if (x.smoke && r.tariff >= 1 && r.tariff <= 3 && (r.quantity == Q_DATE || r.quantity == Q_CUMULATION_COUNTER ||
+                                                    r.quantity == Q_UNKNOWN)) {
+    static const char *DATE[3] = { "Letzter Alarm", "Letzte Demontage", "Letzter Testknopf-Druck" };
+    static const char *CNT[3] = { "Anzahl Alarme", "Anzahl Demontagen", "Anzahl Testknopf-Drücke" };
+    static const char *KD[3] = { "last_alarm", "last_removal", "last_test" };
+    static const char *KC[3] = { "alarms", "removals", "tests" };
+    if (r.quantity == Q_DATE) { r.label = DATE[r.tariff - 1]; r.key = KD[r.tariff - 1]; }
+    else if (r.quantity == Q_CUMULATION_COUNTER) { r.label = CNT[r.tariff - 1]; r.key = KC[r.tariff - 1]; }
+  }
+  if (x.smoke && r.quantity == Q_ERROR_FLAGS && r.kind == VK_NUMBER) r.label = "Fehlerflags (0 = OK)";
+  out(x, r);
+}
+
+int interpret(const Frame &f, const Header &h, const uint8_t *ap, size_t apLen, RecordSink sink, void *ctx) {
+  Interp x;
+  x.sink = sink; x.ctx = ctx; x.h = &h; x.smoke = h.meterType() == 0x1A;
+  int n = decodeManufacturer(f, h, interpSink, &x);
+  if (n == -2) {
+    if (h.ci >= 0xA0 && h.ci <= 0xB7) return 0;              // unknown manufacturer format: raw only
+    n = parseRecords(ap, apLen, interpSink, &x);
+  }
+  if (h.hasTpl) {
+    Record s;
+    s.quantity = Q_STATUS; s.kind = VK_STRING; s.text = statusText(h.status); s.label = "Status";
+    out(x, s);
+  }
+  static const char *SINCE[3] = { "Verbrauch seit Stichtag", "Energie seit Stichtag", "Einheiten seit Stichtag" };
+  static const char *SK[3] = { "volume_since_due", "energy_since_due", "hca_since_due" };
+  static const uint8_t SQ[3] = { Q_VOLUME, Q_ENERGY, Q_HCA };
+  for (int k = 0; k < 2; k++)        // HCA "current" usually already counts from the due date -> no derived value
+    if (x.haveCur[k] && x.haveDue[k] && x.cur[k] >= x.due[k]) {
+      Record d;
+      d.quantity = SQ[k]; d.kind = VK_NUMBER; d.value = x.cur[k] - x.due[k]; d.label = SINCE[k]; d.key = SK[k];
+      d.storage = 0;
+      out(x, d);
+    }
+  return n < 0 ? n : x.count;
 }
 
 }   // namespace wmb

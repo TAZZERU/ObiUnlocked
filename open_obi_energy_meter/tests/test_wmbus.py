@@ -178,7 +178,7 @@ def test_long_frame_b_two_crcs(native):
     body = link_header(dev_type=0x07) + bytes([0x78]) + records
     assert len(body) + 4 + 1 > 128
     info, recs = run(native, "radio", (bytes([0x54, 0x3D]) + frame_b(body)).hex())
-    assert info["rr"] == "0" and info["records"] == "25"
+    assert info["rr"] == "0" and info["records"] == "25"  # 25 records, no TPL -> no status
     assert float(recs["volume"]["value"]) == pytest.approx(1.024)   # same key 25x: the last record wins here
 
 
@@ -212,3 +212,93 @@ def test_manufacturer_specific_tail_and_garbage(native):
     assert info["typekey"] == "smoke" and recs["mfr_data"]["hex"] == "deadbeef"
     assert float(recs["error_flags"]["value"]) == 1
     run(native, "radio", os.urandom(255).hex())  # must not crash on noise (ASan/UBSan enabled)
+
+
+# ---------------------------------------------------------------- manufacturer formats + S1
+def encode_manchester(data, invert=False):
+    bits = "".join(f"{b:08b}" for b in data)
+    chips = "".join(("01" if c == "1" else "10") if invert else ("10" if c == "1" else "01") for c in bits)
+    raw = int(chips, 2).to_bytes(len(chips) // 8, "big")
+    return raw + bytes(8)   # 0x00 = invalid chip pairs, like the noise after a real frame
+
+
+@pytest.mark.parametrize("invert", [False, True])
+def test_s1_manchester(native, invert):
+    body = link_header() + bytes([0x78]) + HCA_RECORDS
+    info, recs = run(native, "s1", encode_manchester(frame_a(body), invert).hex())
+    assert info["rr"] == "0" and info["mode"] == "S1"
+    assert float(recs["hca"]["value"]) == 123456
+
+
+def test_izar_reference_telegram(native):
+    # reference telegram + expected values from the wmbusmeters izar driver documentation
+    body = bytes.fromhex("44304C72242421D401A2013D4013DD8B46A4999C1293E582CC")
+    info, recs = run(native, "radio", (bytes([0x54, 0xCD]) + frame_a(body)).hex())
+    assert info["mfr"] == "SAP" and info["id"] == "21242472" and info["mfrdec"] == "izar"
+    assert float(recs["volume"]["value"]) == pytest.approx(3.488)
+    assert float(recs["volume_s1"]["value"]) == pytest.approx(3.486)
+    assert recs["date_s1"]["date"] == "2019-09-30"
+    assert float(recs["battery_years"]["value"]) == 14.5
+    assert float(recs["transmit_period"]["value"]) == 8
+
+
+def test_techem_water_mkradio3(native):
+    body = bytes.fromhex("4468503132333474" "62A2069F255900B029310000000306060906030609070606050509050505050407040605070500")
+    info, recs = run(native, "radio", (bytes([0x54, 0xCD]) + frame_a(body)).hex())
+    assert info["mfr"] == "TCH" and info["mfrdec"] == "techem_water"
+    assert float(recs["volume"]["value"]) == pytest.approx(13.8)
+    assert float(recs["volume_s1"]["value"]) == pytest.approx(8.9)
+    assert recs["date_s1"]["date"] == "2018-12-31"   # 0x259F: same date packing as the FHKV test below
+
+
+def test_techem_hca_fhkv3(native):
+    body = bytes.fromhex("446850226677116980A0119F27020480048300C408F709143C003D341A2B0B2A0707000000000000062D114457563D71A1850000")
+    info, recs = run(native, "radio", (bytes([0x54, 0xCD]) + frame_a(body)).hex())
+    assert info["mfrdec"] == "techem_hca" and info["id"] == "11776622"
+    assert float(recs["hca"]["value"]) == 131
+    assert float(recs["hca_s1"]["value"]) == 1026
+    assert recs["date"]["date"] == "2020-02-08" and recs["date_s1"]["date"] == "2019-12-31"
+    assert float(recs["room_temp"]["value"]) == pytest.approx(22.44)
+    assert float(recs["radiator_temp"]["value"]) == pytest.approx(25.51)
+
+
+# ---------------------------------------------------------------- interpretation layer
+QDS_REAL = ("4944934441206813180778"   # Qundis water meter seen in the field (L C M ID ver type CI=78)
+            "0DFF5F35" "00822C0000F10007C113FFFF054510003F3C376808005F3A173710009F00AB00A9009000900093"
+            "00B000C200C100AB00A900B5002F" "046D03114C3B")
+
+
+def test_qundis_walkby_real_telegram(native):
+    body = bytes.fromhex(QDS_REAL)[1:]
+    info, recs = run(native, "radio", (bytes([0x54, 0xCD]) + frame_a(body)).hex())
+    assert info["mfr"] == "QDS" and info["id"] == "13682041"
+    assert float(recs["volume"]["value"]) == pytest.approx(104.505)
+    assert float(recs["volume_s1"]["value"]) == pytest.approx(86.837) and recs["date_s1"]["date"] == "2025-12-31"
+    assert float(recs["volume_s2"]["value"]) == pytest.approx(103.717) and recs["date_s2"]["date"] == "2026-10-31"
+    assert float(recs["volume_since_due"]["value"]) == pytest.approx(17.668)
+    assert recs["datetime"]["datetime"] == "2026-11-12T17:03"
+    assert "mfr_data" not in recs and "date_err" not in recs
+
+
+def test_qundis_walkby_reference_blob(native):
+    blob = ("0082da0000600107c113ffff48200000bf2c91170000df2120200000008001000000060019001000160018000d"
+            "001300350017002f")
+    body = link_header(mfr="QDS", ident=0x12353648, ver=0x18, dev_type=0x07) + bytes([0x78]) + bytes.fromhex("0dff5f35" + blob)
+    _, recs = run(native, "radio", (bytes([0x54, 0xCD]) + frame_a(body)).hex())
+    assert float(recs["volume"]["value"]) == pytest.approx(2.048)
+    assert float(recs["volume_s1"]["value"]) == pytest.approx(1.791) and recs["date_s1"]["date"] == "2021-12-31"
+    assert float(recs["volume_s2"]["value"]) == pytest.approx(2.020) and recs["date_s2"]["date"] == "2022-01-31"
+
+
+def test_smoke_detector_ei_head_and_labels(native):
+    head = (0x0F << 8) | 5                   # battery nibble 0xF -> 3.00 V, dust 5
+    recs_hex = ("8440FF2C" + head.to_bytes(4, "little").hex() +
+                "82106C3F3C"                 # tariff 1 date (last alarm) 2025-12-31
+                "8310FD6102000000")          # tariff 1 cumulation counter (alarms) = 2
+    body = link_header(mfr="EIE", ident=0x01097274, ver=0x0C, dev_type=0x1A) + bytes([0x7A, 0x01, 0x04, 0x00, 0x00]) + bytes.fromhex(recs_hex)
+    info, recs = run(native, "radio", (bytes([0x54, 0xCD]) + frame_a(body)).hex())
+    assert info["typekey"] == "smoke"
+    assert float(recs["battery_voltage"]["value"]) == pytest.approx(3.0)
+    assert float(recs["dust_level"]["value"]) == 5 and recs["head_status"]["text"] == "OK"
+    assert recs["last_alarm"]["date"] == "2025-12-31" and float(recs["alarms"]["value"]) == 2
+    assert recs["status"]["text"] == "Batterie_schwach"      # TPL status 0x04 = power low

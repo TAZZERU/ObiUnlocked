@@ -22,7 +22,7 @@ void aes128EncryptBlock(const uint8_t key[16], const uint8_t in[16], uint8_t out
 void aes128DecryptBlock(const uint8_t key[16], const uint8_t in[16], uint8_t out[16]);
 
 // ---- physical / data link layer -------------------------------------------------------------------------
-enum RadioMode : uint8_t { MODE_UNKNOWN = 0, MODE_T1 = 1, MODE_C1A = 2, MODE_C1B = 3 };
+enum RadioMode : uint8_t { MODE_UNKNOWN = 0, MODE_T1 = 1, MODE_C1A = 2, MODE_C1B = 3, MODE_S1 = 4 };
 const char *modeName(uint8_t mode);
 
 uint16_t crc16(const uint8_t *p, size_t n);   // EN 13757: poly 0x3D65, init 0, final complement
@@ -44,6 +44,10 @@ enum RadioResult : int8_t {
 // raw = bytes the radio delivered right after the 0x543D sync word (T1: 3-of-6 chips, C1: 0x54CD/0x543D +
 // frame). Decides the mode, checks every block CRC and fills f.
 RadioResult fromRadio(const uint8_t *raw, size_t rawLen, Frame &f);
+// S1 (868.3 MHz, 32.768 kchip/s Manchester): raw = chips after the 0x7696 sync word.
+RadioResult fromRadioS1(const uint8_t *raw, size_t rawLen, Frame &f);
+// Manchester chips -> bytes (chip pair 10 = 1 / 01 = 0, or the inverse); stops at the first invalid pair.
+size_t decodeManchester(const uint8_t *in, size_t inLen, uint8_t *out, size_t outMax, bool invert);
 
 // ---- link / transport layer -----------------------------------------------------------------------------
 struct Header {
@@ -110,7 +114,7 @@ enum Quantity : uint8_t {
   Q_ACCESS_NO, Q_MEDIUM, Q_MANUFACTURER, Q_PARAMETER_SET, Q_MODEL_VERSION, Q_HW_VERSION, Q_FW_VERSION,
   Q_SW_VERSION, Q_CUSTOMER_LOCATION, Q_CUSTOMER, Q_ERROR_FLAGS, Q_DIGITAL_OUTPUT, Q_DIGITAL_INPUT,
   Q_DIMENSIONLESS, Q_VOLTAGE, Q_CURRENT, Q_RESET_COUNTER, Q_CUMULATION_COUNTER, Q_BATTERY_DAYS,
-  Q_HUMIDITY, Q_MFR_SPECIFIC, Q_COUNT_
+  Q_HUMIDITY, Q_MFR_SPECIFIC, Q_ROOM_TEMP, Q_RADIATOR_TEMP, Q_BATTERY_YEARS, Q_TX_PERIOD, Q_STATUS, Q_DUST, Q_CONSUMPTION, Q_COUNT_
 };
 struct QuantityInfo {
   const char *key;           // JSON / MQTT key stem ("energy", "hca", ...)
@@ -120,7 +124,7 @@ struct QuantityInfo {
 };
 const QuantityInfo &quantityInfo(uint8_t q);
 
-enum ValueKind : uint8_t { VK_NUMBER = 0, VK_DATE, VK_DATETIME, VK_HEX, VK_TEXT };
+enum ValueKind : uint8_t { VK_NUMBER = 0, VK_DATE, VK_DATETIME, VK_HEX, VK_TEXT, VK_STRING };
 struct Record {
   uint8_t  dif = 0, vif = 0, vifeTable = 0;   // vifeTable: 0 primary, 0xFB / 0xFD extension tables
   uint8_t  function = 0;                      // 0 instantaneous, 1 maximum, 2 minimum, 3 value during error
@@ -132,6 +136,10 @@ struct Record {
   double   value = 0;                         // scaled to quantityInfo(quantity).unit
   uint16_t year = 0; uint8_t month = 0, day = 0, hour = 0, minute = 0;   // VK_DATE / VK_DATETIME
   const uint8_t *raw = nullptr; uint8_t rawLen = 0;                       // the data field bytes
+  uint8_t  vife0 = 0;                         // first VIFE after the VIF (manufacturer-specific sub-codes)
+  const char *label = nullptr;                // human-readable name override (else derived from quantity/storage)
+  const char *text = nullptr;                 // VK_STRING value
+  const char *key = nullptr;                  // key override (else recordKey())
 };
 // Stable key for a record, e.g. "energy", "hca_s1", "volume_max_s2_t1". Writes <= 31 chars + NUL.
 void recordKey(const Record &r, char *out, size_t outMax);
@@ -140,5 +148,21 @@ typedef void (*RecordSink)(const Record &r, void *ctx);
 // Walks the records of a cleartext application payload; returns the number of records found, or -1 if
 // it stopped at a malformed record (the ones before it were still reported).
 int parseRecords(const uint8_t *p, size_t n, RecordSink sink, void *ctx);
+
+// Manufacturer-specific telegram formats that don't use DIF/VIF records:
+//   * Diehl / Sappel IZAR water meters (SAP, DME, HYD; PRIOS scrambling with the public default keys)
+//   * Techem heat cost allocators (FHKV data III) and water meters (MK Radio 3/4), unencrypted CI 0xA0/0xA2
+// Returns the number of records reported, -1 if the format matched but the data didn't validate, or -2 if no
+// manufacturer decoder applies (then use parseRecords on the application data instead).
+int decodeManufacturer(const Frame &f, const Header &h, RecordSink sink, void *ctx);
+const char *manufacturerDecoderName(const Frame &f, const Header &h);   // "izar", "techem_hca", ... or nullptr
+
+// One-stop interpretation of a telegram's (decrypted) application data -- what the UI and MQTT use:
+//   * manufacturer formats above, else DIF/VIF records
+//   * Qundis walk-by blobs (0DFF5F) expanded into readings, Ei Electronics smoke detector head status
+//   * smoke detector records labelled (alarm / removal / test button), OMS status byte as plain text
+//   * derived "consumption since due date" from the current and due-date readings
+int interpret(const Frame &f, const Header &h, const uint8_t *ap, size_t apLen, RecordSink sink, void *ctx);
+const char *statusText(uint8_t st);   // OMS TPL status byte -> "OK" / "Batterie schwach" / ...
 
 }   // namespace wmb

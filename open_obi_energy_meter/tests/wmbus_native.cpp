@@ -39,7 +39,11 @@ static void printRecord(const wmb::Record &r, void *) {
   printf("rec %s kind=%u ", key, r.kind);
   if (r.kind == wmb::VK_NUMBER) printf("value=%.10g unit=%s\n", r.value, wmb::quantityInfo(r.quantity).unit);
   else if (r.kind == wmb::VK_DATE) printf("date=%04u-%02u-%02u\n", r.year, r.month, r.day);
-  else if (r.kind == wmb::VK_DATETIME)
+  else if (r.kind == wmb::VK_STRING) {
+    printf("text=");
+    for (const char *t = r.text; *t; t++) putchar(*t == ' ' ? '_' : *t);
+    printf("\n");
+  } else if (r.kind == wmb::VK_DATETIME)
     printf("datetime=%04u-%02u-%02uT%02u:%02u\n", r.year, r.month, r.day, r.hour, r.minute);
   else {
     printf("hex=");
@@ -57,11 +61,11 @@ int main(int argc, char **argv) {
     printf("\n");
     return 0;
   }
-  if (argc >= 3 && !strcmp(argv[1], "radio")) {
+  if (argc >= 3 && (!strcmp(argv[1], "radio") || !strcmp(argv[1], "s1"))) {
     std::vector<uint8_t> raw = unhex(argv[2]);
     std::vector<uint8_t> key = argc >= 4 ? unhex(argv[3]) : std::vector<uint8_t>();
     wmb::Frame f;
-    int rr = wmb::fromRadio(raw.data(), raw.size(), f);
+    int rr = !strcmp(argv[1], "s1") ? wmb::fromRadioS1(raw.data(), raw.size(), f) : wmb::fromRadio(raw.data(), raw.size(), f);
     printf("rr=%d mode=%s len=%u\n", rr, wmb::modeName(f.mode), f.len);
     if (rr != wmb::RR_OK) return 0;
     wmb::Header h;
@@ -75,7 +79,9 @@ int main(int argc, char **argv) {
     size_t apLen;
     int dr = wmb::decrypt(f, h, key.size() == 16 ? key.data() : nullptr, ap, sizeof ap, apLen);
     printf("decrypt=%s\n", wmb::decryptResultName(dr));
-    if (dr == wmb::DR_OK || dr == wmb::DR_PLAIN) printf("records=%d\n", wmb::parseRecords(ap, apLen, printRecord, nullptr));
+    const char *md = wmb::manufacturerDecoderName(f, h);
+    if (md) printf("mfrdec=%s\n", md);
+    if (dr == wmb::DR_OK || dr == wmb::DR_PLAIN) printf("records=%d\n", wmb::interpret(f, h, ap, apLen, printRecord, nullptr));
     return 0;
   }
   fprintf(stderr, "usage: %s radio <hex> [key] | cmac <key> <msg>\n", argv[0]);
