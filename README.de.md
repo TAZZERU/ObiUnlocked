@@ -1,4 +1,6 @@
-# ObiUnlocked
+# ObiUnlocked (Deutsch)
+
+> English version: [README.md](README.md)
 
 Firmware für das **OBI/heyOBI-Energie-Gateway** (ESP32-C3 + SX1262). Sie macht das Gerät zu einem lokalen
 868-MHz-Empfänger für die ganze Wohnung:
@@ -10,8 +12,7 @@ Firmware für das **OBI/heyOBI-Energie-Gateway** (ESP32-C3 + SX1262). Sie macht 
 - **LoRaWAN:** Monitor für Geräte in der Umgebung, mit eigenen Session-Keys auch mit entschlüsselten Messwerten
 
 Alles erscheint im Dashboard des Gateways mit verständlichen Bezeichnungen, also „Zählerstand“, „Stand am
-Stichtag“ oder „Letzter Alarm“ statt Rohdaten. Einzelne Geräte gibst du per Schalter an MQTT und Home Assistant
-weiter.
+Stichtag“ oder „Letzter Alarm“ statt Rohdaten. Geräte, die du unter „In der Nähe“ hinzufügst, gehen an MQTT und Home Assistant.
 
 ObiUnlocked ist ein Fork von [OpenOBI](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud) (atc1441).
 Dessen Doku, also Reverse Engineering, eigene Cloud und Flashen des Original-Gateways, liegt unverändert in
@@ -41,22 +42,21 @@ Mit `pio run -e obi_gateway_c3 -t push` wird gebaut und direkt hochgeladen. Adre
 `platformio.local.ini` (siehe `platformio.local.ini.example`). Die anderen Board-Varianten aus OpenOBI
 (Heltec, LILYGO, XIAO, generic) bauen genauso.
 
-## Dashboard
+## Weboberfläche
 
-| Bereich | Inhalt |
+Eine gemeinsame Navigationsleiste auf allen Seiten, auch fürs Handy:
+
+| Seite | Inhalt |
 |---|---|
-| **Stromzähler** | OBI-Leseköpfe: Bezug, Einspeisung, Leistung, Batterie, Intervall, Binden, Namen, Kachel-Layout, Lesekopf-Firmware per LoRa |
-| **Funkgeräte** | Alle empfangenen Geräte als Liste: Name/Typ, Hersteller, **aktueller Wert**, Signal, zuletzt gesehen, Verschlüsselung. Filter nach Zähler / Heizkosten / Rauchmelder / Wetter / LoRaWAN. Ein Klick öffnet die Details. |
-| **Empfang** | Welche Empfänger aktiv sind, Aufteilung der Funkzeit, Statistik, Live-Log |
+| **Stromzähler** | OBI-Leseköpfe: Werte, Binden, Namen, Kachel-Layout, Intervall, Lesekopf-Firmware über LoRa |
+| **Meine Geräte** | Deine hinzugefügten Funkgeräte mit allen Werten – **nur diese** gehen per MQTT an Home Assistant |
+| **In der Nähe** | Alles, was das Gateway empfängt (auch Nachbarn); filtern, „Hinzufügen“, Klick öffnet Details (Name, AES-/LoRaWAN-Schlüssel, Rohdaten) |
+| **Empfang** | aktive Empfänger, Funkzeit, Statistik, Live-Log |
+| **Verlauf / OBI-Funk / Einstellungen / Debug** | aus OpenOBI |
+| **Hilfe** | eingebaute Anleitung |
 
-In den **Details** eines Geräts:
-- alle Messwerte mit deutscher Bezeichnung und Einheit
-- Name vergeben
-- AES-Schlüssel eintragen (wM-Bus) bzw. NwkSKey/AppSKey (LoRaWAN)
-- Technik-Infos und Rohdaten (Telegramm und entschlüsselter Klartext)
-- Gerät vergessen
-
-Die übrigen Seiten (Verlauf, OBI-Funk, Einstellungen, Debug) stammen aus OpenOBI.
+Geräte, deren Telegramme nur mit Übertragungsfehlern ankommen, erscheinen trotzdem (Gerätekopf hat eine eigene
+Prüfsumme) – markiert als **„Empfang zu schwach“** mit Fehlerzähler.
 
 ## Was ausgewertet wird
 
@@ -129,7 +129,7 @@ entfernt die Firmware es auch aus Home Assistant. Voraussetzung ist **Home Assis
 ```bash
 cd obiunlocked
 pip install pytest pycryptodome          # OpenSSL-Header nötig (macOS: brew install openssl)
-python -m pytest tests/test_wmbus.py tests/test_radio_cores.py
+python -m pytest tests
 ```
 
 Die Decoder sind plattformunabhängig und werden auf dem Rechner getestet. Grundlage sind:
