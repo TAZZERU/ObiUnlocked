@@ -1,462 +1,430 @@
-
-<!doctype html><html><head><meta charset="utf-8"><link rel="icon" href="/favicon.svg">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Open OBI Energy Tracker</title>
+<!doctype html><html lang="de"><head><meta charset="utf-8"><link rel="icon" href="/favicon.svg">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>ObiUnlocked</title>
 <style>
-:root{--bg:#0a0e14;--panel:#141a23;--panel2:#1b2430;--line:#232e3c;--txt:#eaf0f7;--dim:#7d8da0;
---accent:#31d07a;--accent2:#12a35a;--amber:#e3b341;--red:#f0616d;--blue:#5aa9ff;
---mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+:root{--bg:#f4f5f7;--p1:#fff;--p2:#f7f8fa;--p3:#eceef2;--ln:#d9dde3;--tx:#1d2330;--dim:#5b6575;--mut:#8b94a3;
+--ac:#2f6db5;--acbg:#e8f0fa;--ok:#2e7d4f;--am:#a8650b;--rd:#b42c2c;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#16181c;--p1:#1d2026;--p2:#22262d;--p3:#2a2f37;--ln:#353b45;--tx:#e3e6eb;--dim:#9aa3b0;--mut:#6c7583;
+--ac:#6ea0dc;--acbg:#23324a;--ok:#5fb37f;--am:#d9a24a;--rd:#e07070}}
 *{box-sizing:border-box}
-body{margin:0;background:
- radial-gradient(1200px 500px at 80% -10%,#12351f33,transparent),
- radial-gradient(900px 400px at -10% 0%,#0e2a4a33,transparent),var(--bg);
- color:var(--txt);font:14.5px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;min-height:100vh}
-header{padding:12px 20px;position:sticky;top:0;z-index:5;
- background:#0a0e14cc;backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.htop{display:flex;align-items:center;gap:13px}
-.logo{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:19px;
- background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 0 18px #31d07a55}
-h1{font-size:16px;margin:0;font-weight:650}.sub{color:var(--dim);font-size:12px}
-.ghlink{font-size:12px;font-weight:500;color:var(--accent);text-decoration:none;margin-left:8px;vertical-align:middle;white-space:nowrap}
-.ghlink:hover{text-decoration:underline}
-.spacer{flex:1}
-.seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;overflow:hidden}
-.seg button{background:transparent;border:0;color:var(--dim);padding:7px 12px;cursor:pointer;font-size:13px;font-weight:600}
-.seg button.act{background:var(--accent);color:#04140a}
-.icon{background:var(--panel2);border:1px solid var(--line);color:var(--dim);border-radius:9px;padding:7px 11px;cursor:pointer;font-size:15px}
-.wrap{max-width:1200px;margin:0 auto;padding:20px}
-.bar{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
-.pill{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px 12px;font-size:12.5px;white-space:nowrap}
-.pill .k{color:var(--dim);margin-right:7px;font-weight:600}.pill b{font-family:var(--mono)}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
-.on{background:var(--accent);box-shadow:0 0 8px var(--accent)}.off{background:var(--red)}.idle{background:var(--dim)}
-.list{display:flex;flex-direction:column;gap:12px}
-.card{background:linear-gradient(180deg,#161d27,#131922);border:1px solid var(--line);border-radius:15px;
- padding:14px 16px;transition:.15s;position:relative;overflow:hidden}
-.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(var(--accent),var(--accent2))}
-.hd{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.hd .id{font-family:var(--mono);font-size:17px;font-weight:700;letter-spacing:1.5px}
-.tag{font-size:10px;padding:3px 8px;border-radius:20px;border:1px solid var(--line);color:var(--dim);
- text-transform:uppercase;letter-spacing:.8px;font-weight:700}
-.tag.meter{color:var(--blue);border-color:#26496f;background:#1a2c4022}
-.tag.outlet{color:var(--amber);border-color:#5a4713;background:#3a2e0a22}
-.tag.pend{color:#ffd166;border-color:#6a5316;background:#4a3a0e33}
-.card.pending{opacity:.62;filter:grayscale(.5)}
-.card.pending .mx,.card.pending .uuid{opacity:.8}
-.pairbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
-.hidetog{display:inline-flex;align-items:center;gap:6px;color:var(--dim);font-size:12px;cursor:pointer;margin-left:4px;user-select:none}
-.hidetog input{width:auto;margin:0;cursor:pointer}
-#hideunb_badge a{color:var(--accent);cursor:pointer;text-decoration:none}
-#hideunb_badge a:hover{text-decoration:underline}
-.meta{color:var(--dim);font-size:12px;font-family:var(--mono)}
-.del{margin-left:0;background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:7px;padding:3px 9px;cursor:pointer;font-size:13px;line-height:1}
-.del:hover{border-color:var(--red);color:var(--red)}
-.del:disabled{opacity:.4;cursor:not-allowed}                 /* edit mode: delete stays visible but inert, so it can't be mistaken for a cancel */
-.del:disabled:hover{border-color:var(--line);color:var(--dim)}
-.ren{background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:7px;padding:3px 8px;cursor:pointer;font-size:12px;line-height:1}
-.ren:hover{border-color:var(--accent);color:var(--accent)}
-/* per-reader "edit boxes" pencil — sits in the card header, right-aligned just left of the ✕ delete button */
-.edb{margin-left:auto;background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:7px;padding:3px 9px;cursor:pointer;font-size:13px;line-height:1}
-.edb:hover{border-color:var(--accent);color:var(--accent)}
-.edb.act{border-color:var(--accent);color:var(--accent);background:#12331f}
-.nmi{width:210px;max-width:55vw;font-size:16px;font-weight:600;padding:6px 9px}
-.uuid{font-family:var(--mono);font-size:11.5px;color:var(--dim);word-break:break-all;margin:7px 0 13px;
- padding:6px 9px;background:#0d131b;border-radius:8px;border:1px solid #1a222d}
-.uuid b{color:#9fb0c4;letter-spacing:.5px}
-.mx{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px}
-.mc{background:#0f151d;border:1px solid #1a222d;border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:3px;min-width:0}
-.mc .l{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;font-weight:600}
-.mc .v{font-family:var(--mono);font-size:15.5px;font-weight:600;line-height:1.15;
- white-space:nowrap;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:3px}
-.mc .v small{font-size:11px;color:var(--dim);font-weight:400;flex:none}
-.v.na{color:#3d4a5a}
-.batt{height:5px;background:#0a0e14;border-radius:3px;overflow:hidden;margin-top:6px}
-.batt>i{display:block;height:100%;border-radius:3px;transition:.3s}
-/* dashboard box edit mode: drag to reorder, eye to show/hide (per reader, persisted server-side).
-   Both controls sit on their own high-contrast chip so they stay visible on the dark card; the eye chip
-   is additionally green-tinted when the box is shown and red-tinted when hidden, so state reads at a glance
-   even though the emoji glyph itself ignores `color`. */
-.mc.edit{position:relative;cursor:grab;user-select:none;padding:32px 11px 9px}
-.mc.edit:active{cursor:grabbing}
-.mc.edit.hid{opacity:.7}
-.mc .bh{position:absolute;top:6px;left:6px;display:inline-flex;align-items:center;justify-content:center;
- width:26px;height:24px;color:#dfe7f1;font-size:15px;letter-spacing:-2px;cursor:grab;pointer-events:none;
- background:#222c39;border:1px solid #3a4a60;border-radius:7px}
-.mc .be{position:absolute;top:6px;right:6px;display:inline-flex;align-items:center;justify-content:center;
- min-width:30px;height:24px;padding:0 6px;cursor:pointer;font-size:13px;line-height:1;border-radius:7px;
- background:#222c39;border:1px solid #3a4a60}
-.mc.edit:not(.hid) .be{border-color:#2f7a4d;background:#12331f}   /* shown  -> green chip */
-.mc.edit.hid .be{border-color:#8a3a3a;background:#3a1717}         /* hidden -> red chip  */
-.mc .be:hover{filter:brightness(1.35)}
-.mc.dragover{outline:2px dashed var(--accent);outline-offset:-2px}
-.ebar{display:flex;justify-content:flex-end;margin-top:9px}
-.icon.act{border-color:var(--accent);color:var(--accent)}
-.ctrl{display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap}
-.ivrow button.g{white-space:nowrap}                   /* interval pill + file + flash share one row; flash label never wraps */
-input{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 10px;font-family:var(--mono);font-size:13px}
-.ctrl input{width:92px}
-button.b{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#04140a;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer}
-button.g{background:transparent;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px 13px;cursor:pointer;font-size:13px}
-/* interval quick-select: one connected pill (Live | chips | custom input | set), mirrors the .seg look */
-.ivseg{display:flex;flex:0 0 auto;background:var(--panel2);border:1px solid var(--line);border-radius:9px;overflow-x:auto;max-width:100%}
-.ivseg button,.ivseg input{background:transparent;border:0;border-right:1px solid var(--line);border-radius:0;color:var(--dim);padding:8px 11px;font-family:var(--mono)}
-.ivseg button{font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
-.ivseg button:hover{color:var(--txt)}
-.ivseg button.act{background:var(--accent);color:#04140a}
-.ivseg input{width:62px;text-align:center;color:var(--txt);padding:8px 6px;border-right:0}
-.ivseg .set{border-right:0;border-left:1px solid var(--line);background:var(--accent);color:#04140a;font-weight:700}
-.hint{color:var(--amber);font-size:12px;margin-top:9px;display:flex;gap:6px;align-items:center}
-.boot{background:linear-gradient(90deg,#3a2a05,#2a1f08);border:1px solid #7a5a12;color:#f5c451;
- font-size:12px;font-weight:600;padding:7px 11px;border-radius:9px;margin:0 0 12px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;display:none}
-.panel.open{display:block}
-.panel h2{margin:0 0 3px;font-size:15px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin:12px 0}
-.grid2 label{font-size:11.5px;color:var(--dim);display:block;margin-bottom:5px}
-.grid2 input{width:100%}
-footer{color:var(--dim);font-size:12px;text-align:center;padding:26px}
-footer b{font-family:var(--mono);color:var(--txt)}
-/* ---------- phone / narrow screens ---------- */
-@media (max-width:760px){
- header{padding:11px 13px;position:static}   /* scroll away with the page (don't eat fixed height) */
- .htop{flex-wrap:wrap;gap:9px 10px}          /* title + toolbar wrap instead of overflowing */
- .spacer{display:none}
- h1{font-size:15px}
- .sub{font-size:11px;line-height:1.35}
- .ghlink{margin-left:6px}
- .seg button{padding:9px 13px;font-size:13px}       /* comfy touch targets */
- .icon{padding:9px 11px;font-size:14px;flex:1 1 auto;text-align:center}  /* toolbar buttons share width & wrap */
- .bar{gap:7px;margin-top:11px}
- .pill{flex:1 1 calc(50% - 4px);white-space:normal;padding:8px 10px;font-size:12px}  /* 2-up status pills */
- .wrap{padding:14px 12px}
- .list{gap:11px}
- .card{padding:13px 13px;border-radius:13px}
- .hd .id{font-size:16px}
- .uuid{font-size:11px;margin:6px 0 11px}
- .mx{grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:6px}
- .grid2{grid-template-columns:1fr;gap:10px}          /* config forms: single column */
- input{font-size:16px}                               /* >=16px stops iOS focus-zoom */
- .ctrl{gap:8px}
- .ctrl input{width:auto}
- .ivrow .ivseg{flex:1 1 100%;min-width:0}            /* mobile: interval pill takes its own row */
- .ctrl input[type=file]{flex:1 1 100%;min-width:0}   /* file picker gets its own row */
- .ctrl button.g{flex:1 1 auto;min-width:104px}
- button.b,button.g{padding:11px 15px}
- .ctrl .meta{flex:1 1 100%}
- footer{padding:22px 12px}
-}
-@media (max-width:400px){
- .icon{flex:1 1 calc(50% - 5px)}                     /* 2-up toolbar buttons on tiny phones */
- .seg{flex:1 1 100%}.seg button{flex:1}              /* DE/EN full width */
-}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}button,input,select{font:inherit;color:inherit}
+.mono{font-family:var(--mono)}.dim{color:var(--dim)}.mut{color:var(--mut)}.sp{flex:1}
+header{background:var(--p1);border-bottom:1px solid var(--ln)}
+.top{display:flex;align-items:center;gap:14px;padding:9px 20px;max-width:1280px;margin:0 auto;flex-wrap:wrap}
+.brand b{font-size:15px;font-weight:600}.brand span{font-size:12.5px;color:var(--dim);margin-left:8px}
+.chips{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px}
+.chip{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;color:var(--dim)}.chip b{color:var(--tx);font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--mut);flex:none}.dot.on{background:var(--ok)}.dot.off{background:var(--rd)}.dot.warn{background:var(--am)}
+.tools{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.btn{background:var(--p1);border:1px solid var(--ln);border-radius:5px;padding:5px 10px;cursor:pointer;font-size:13px;white-space:nowrap;color:var(--tx);display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--p2);text-decoration:none}.btn.pri{background:var(--ac);border-color:var(--ac);color:#fff}.btn.pri:hover{filter:brightness(1.08)}
+.btn.bad{color:var(--rd)}.btn.sm{padding:3px 8px;font-size:12px}.btn:disabled{opacity:.5;cursor:not-allowed}
+.tools a.btn,.tools button.btn{border-color:transparent;color:var(--dim)}.tools .btn:hover{color:var(--tx);background:var(--p2)}
+.seg{display:inline-flex;border:1px solid var(--ln);border-radius:5px;overflow:hidden}
+.seg button{background:var(--p1);border:0;padding:4px 9px;cursor:pointer;color:var(--dim);font-size:12px}.seg button.on{background:var(--p3);color:var(--tx);font-weight:600}
+nav.tabs{display:flex;gap:2px;max-width:1280px;margin:0 auto;padding:0 20px;overflow-x:auto}
+nav.tabs a{padding:8px 12px;color:var(--dim);border-bottom:2px solid transparent;white-space:nowrap}nav.tabs a:hover{color:var(--tx);text-decoration:none}
+nav.tabs a.on{color:var(--tx);border-color:var(--ac);font-weight:600}nav.tabs a .n{font-size:11.5px;color:var(--mut);margin-left:5px;font-weight:400}
+main{max-width:1280px;margin:0 auto;padding:16px 20px 30px}
+section[hidden]{display:none}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.note{color:var(--dim);font-size:12.5px;line-height:1.55}.note b{color:var(--tx);font-weight:600}
+.card{background:var(--p1);border:1px solid var(--ln);border-radius:6px;padding:12px 14px}
+.empty{padding:24px;text-align:center;color:var(--dim)}
+input[type=text],input[type=number],input:not([type]),select{background:var(--p1);border:1px solid var(--ln);border-radius:5px;padding:5px 8px;min-width:0}
+input:focus,select:focus{outline:2px solid var(--acbg);border-color:var(--ac)}
+label.ck{display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+input[type=checkbox]{accent-color:var(--ac);width:15px;height:15px;margin:0}
+.tag{font-size:11.5px;padding:1px 6px;border-radius:3px;border:1px solid var(--ln);color:var(--dim);white-space:nowrap}
+.tag.ok{color:var(--ok)}.tag.warn{color:var(--am)}.tag.bad{color:var(--rd)}.tag.info{color:var(--dim)}
+.readers{display:flex;flex-direction:column;gap:10px}
+.rc.pend{opacity:.7}
+.rh{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.rh .nm{font-size:15.5px;font-weight:600}.rh .meta{color:var(--dim);font-size:12px}
+.ib{background:none;border:1px solid var(--ln);color:var(--dim);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px}
+.ib:hover{color:var(--tx)}.ib.on{color:var(--ac);border-color:var(--ac)}.ib.del:hover{color:var(--rd)}.ib:disabled{opacity:.4;cursor:not-allowed}
+.uuid{font-family:var(--mono);font-size:11.5px;color:var(--mut);margin:4px 0 10px;word-break:break-all}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--ln);border:1px solid var(--ln);border-radius:5px;overflow:hidden}
+.tile{padding:8px 12px;min-width:0;position:relative;background:var(--p2)}
+.tile .l{font-size:12px;color:var(--dim)}
+.tile .v{font-family:var(--mono);font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.tile .v small{font-size:12px;color:var(--dim);margin-left:4px}.tile .v.na{color:var(--mut)}
+.batt{height:3px;background:var(--p3);margin-top:5px}.batt>i{display:block;height:100%}
+.tile.edit{cursor:grab;padding-top:30px}.tile.edit.hid{opacity:.5}.tile.drag{outline:2px dashed var(--ac);outline-offset:-2px}
+.tile .bh,.tile .be{position:absolute;top:5px;height:20px;border-radius:3px;border:1px solid var(--ln);background:var(--p1);font-size:11px;display:grid;place-items:center}
+.tile .bh{left:5px;width:22px;pointer-events:none;color:var(--mut)}.tile .be{right:5px;cursor:pointer;padding:0 6px;color:var(--dim)}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.ivseg{display:flex;border:1px solid var(--ln);border-radius:5px;overflow:hidden;max-width:100%;overflow-x:auto}
+.ivseg button,.ivseg input{background:var(--p1);border:0;border-right:1px solid var(--ln);border-radius:0;padding:4px 9px;font-size:12.5px;color:var(--dim)}
+.ivseg button{cursor:pointer}.ivseg button.on{background:var(--acbg);color:var(--ac);font-weight:600}.ivseg input{width:64px;text-align:center;color:var(--tx);border-right:0}
+.ivseg .set{background:var(--ac);color:#fff;border-right:0}
+details.adv{margin-top:8px}details summary{cursor:pointer;color:var(--dim);font-size:12.5px}
+.hint{color:var(--am);font-size:12.5px;margin-top:8px}.boot{color:var(--am);font-size:12.5px;margin-bottom:6px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.filters input[type=text]{flex:1 1 220px}
+.cats{display:flex;border:1px solid var(--ln);border-radius:5px;overflow:hidden;flex-wrap:wrap}
+.cats button{background:var(--p1);border:0;border-right:1px solid var(--ln);padding:4px 10px;cursor:pointer;color:var(--dim);font-size:12.5px}
+.cats button:last-child{border-right:0}.cats button.on{background:var(--p3);color:var(--tx);font-weight:600}
+.tw{overflow-x:auto;background:var(--p1);border:1px solid var(--ln);border-radius:6px}
+table.dl{width:100%;border-collapse:collapse;font-size:13px}
+table.dl th{text-align:left;font-weight:600;color:var(--dim);font-size:12px;padding:7px 10px;border-bottom:1px solid var(--ln);background:var(--p2);white-space:nowrap}
+table.dl td{padding:7px 10px;border-bottom:1px solid var(--p3);white-space:nowrap;vertical-align:middle}
+table.dl tbody tr{cursor:pointer}table.dl tbody tr:hover{background:var(--p2)}table.dl tr:last-child td{border-bottom:0}
+table.dl td.val{font-family:var(--mono);text-align:right}table.dl th.r{text-align:right}
+table.dl .nm{font-weight:600}table.dl .sub{font-size:12px;color:var(--mut)}
+.ov{position:fixed;inset:0;background:#0006;z-index:50;display:flex;justify-content:flex-end}.ov[hidden]{display:none}
+.pane{width:min(600px,100%);height:100%;background:var(--p1);border-left:1px solid var(--ln);overflow-y:auto;padding:16px 20px}
+.pane h2{margin:0;font-size:17px;font-weight:600}.pane h3{font-size:12.5px;margin:18px 0 6px;color:var(--dim);font-weight:600}
+.vt{width:100%;border-collapse:collapse;font-size:13.5px}.vt td{padding:6px 4px;border-bottom:1px solid var(--p3);vertical-align:top}
+.vt td:first-child{color:var(--dim);width:50%}.vt td.v{font-family:var(--mono);word-break:break-word}.vt td.v small{color:var(--dim)}
+.vt tr.dg td{font-size:12.5px;color:var(--mut)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:12.5px}.kv span:nth-child(odd){color:var(--dim)}
+.hex{font-family:var(--mono);font-size:11px;word-break:break-all;color:var(--dim);background:var(--p2);border:1px solid var(--ln);border-radius:4px;padding:7px;line-height:1.55}
+.frm{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}.frm input{flex:1 1 200px}
+.abar{display:flex;height:8px;border-radius:2px;overflow:hidden;background:var(--p3);margin:8px 0}.abar i{display:block;height:100%}
+.leg{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--dim)}.leg span::before{content:"";display:inline-block;width:8px;height:8px;margin-right:5px;background:var(--c)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;background:var(--ln);margin-top:12px;border:1px solid var(--ln);border-radius:5px;overflow:hidden}
+.st{padding:7px 11px;background:var(--p2)}.st .l{font-size:12px;color:var(--dim)}.st .v{font-family:var(--mono);font-size:14px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.opts{display:flex;flex-direction:column;gap:8px}.opts .d{font-size:12px;color:var(--mut);margin:-5px 0 0 22px}
+.chgrid{display:flex;flex-wrap:wrap;gap:4px 12px;margin:2px 0 0 22px;font-size:12.5px}
+table.log{width:100%;border-collapse:collapse;font-size:12.5px}table.log th{color:var(--dim);text-align:left;font-weight:600;padding:5px 6px;border-bottom:1px solid var(--ln)}
+table.log td{padding:4px 6px;border-bottom:1px solid var(--p3);white-space:nowrap}table.log td.hex2{white-space:normal;font-family:var(--mono);font-size:11px;color:var(--dim);word-break:break-all}
+footer{color:var(--mut);font-size:12px;text-align:center;padding:18px}
+@media (max-width:820px){.top{padding:8px 12px}nav.tabs{padding:0 12px}main{padding:12px}.cols{grid-template-columns:1fr}
+ .chips .chip.opt,table.dl .hm{display:none}input,select{font-size:16px}.pane{padding:12px}}
 </style></head><body>
 <header>
-<div class="htop"><div class="logo">⚡</div><div><h1>Open OBI Energy Tracker<a class="ghlink" href="https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud" target="_blank" rel="noopener" title="View this project on GitHub">GitHub ↗</a></h1><div class="sub" id="sub"></div></div>
-<div class="spacer"></div>
-<div class="seg"><button id="lde" onclick="setLang('de')">DE</button><button id="len" onclick="setLang('en')">EN</button></div>
-<button class="icon" onclick="location.href='/settings'" title="WiFi, MQTT &amp; Firmware-Einstellungen">⚙ Settings</button>
-<button class="icon" onclick="location.href='/history'" title="Energie-Historie &amp; Tagesverbrauch pro Reader">📈 History</button>
-<button class="icon" onclick="location.href='/radio'" title="Live LoRa radio messages">📡 Radio</button>
-<button class="icon" onclick="location.href='/meters'" title="wM-Bus / LoRaWAN devices (ObiUnlocked)">📟 Funkgeräte</button>
-<button class="icon" onclick="location.href='/debug'" title="Flash hex editor / eFuses / debug">🐞 Debug</button>
-<button class="icon" onclick="rebootGw()" title="Restart the gateway">⟳ Reboot</button>
-<button class="icon" id="logout_btn" style="display:none" onclick="doLogout()" title="Log out">⎋ Logout</button></div>
-<div class="bar" id="bar"></div>
+ <div class="top">
+  <div class="brand"><b>ObiUnlocked</b><span id="gwname"></span></div>
+  <div class="chips" id="chips"></div><div class="sp"></div>
+  <div class="tools">
+   <div class="seg"><button id="lde">DE</button><button id="len">EN</button></div>
+   <a class="btn" href="/history" id="t_hist"><span class="lb"></span></a>
+   <a class="btn" href="/radio" id="t_radio"><span class="lb"></span></a>
+   <a class="btn" href="/settings" id="t_set"><span class="lb"></span></a>
+   <a class="btn" href="/debug" id="t_dbg"><span class="lb"></span></a>
+   <button class="btn" id="t_reboot"><span class="lb"></span></button>
+   <button class="btn" id="t_logout" hidden><span class="lb"></span></button>
+  </div>
+ </div>
+ <nav class="tabs"><a href="#strom" data-t="strom"></a><a href="#funk" data-t="funk"></a><a href="#empfang" data-t="empfang"></a></nav>
 </header>
-<div class="wrap">
- <div class="pairbar"><button class="b" id="pair_btn" onclick="pairAll()"></button><span class="meta" id="pair_st"></span>
-  <label class="hidetog"><input type="checkbox" id="hideunb_cb" onchange="setHideUnbound()"><span id="hideunb_lbl"></span></label>
-  <span class="meta" id="hideunb_badge"></span></div>
- <div class="list" id="list"></div>
- <footer><span id="ft"></span> · <b id="gw"></b></footer>
-</div>
+<main>
+<section id="s_strom">
+ <div class="bar"><button class="btn pri" id="pair_btn"></button><span class="dim" id="pair_st"></span><span class="sp"></span>
+  <label class="ck" id="hideunb_w"><input type="checkbox" id="hideunb_cb"><span id="hideunb_lbl"></span></label><span class="dim" id="hideunb_badge"></span></div>
+ <div class="readers" id="list"></div>
+</section>
+<section id="s_funk" hidden>
+ <div class="filters"><input type="text" id="q"><div class="cats" id="cats"></div>
+  <label class="ck"><input type="checkbox" id="onlysel"><span id="onlysel_l"></span></label>
+  <select id="sort"></select></div>
+ <div class="tw"><table class="dl"><thead><tr id="dl_h"></tr></thead><tbody id="devs"></tbody></table></div>
+ <div class="card empty" id="devs_empty" hidden></div>
+ <p class="note" id="funk_note" style="margin-top:12px"></p>
+</section>
+<section id="s_empfang" hidden>
+ <div class="card"><div class="dim" id="air_t" style="font-size:12.5px"></div><div class="abar" id="abar"></div><div class="leg" id="leg"></div>
+  <div class="stats" id="stats"></div><div class="bar" style="margin:12px 0 0"><button class="btn sm" id="st_reset"></button></div></div>
+ <div class="cols">
+  <div class="card"><h3 style="margin:0 0 10px;font-size:14px" id="cfg_t"></h3><div class="opts" id="opts"></div>
+   <div class="frm"><span class="dim" id="win_l" style="align-self:center"></span><input type="number" id="c_win" min="100" max="900" step="10" style="flex:0 0 100px"><span class="dim" style="align-self:center">ms</span></div>
+   <div class="frm"><span class="dim" id="avh_l" style="align-self:center"></span><input type="number" id="c_avh" min="1" max="720" style="flex:0 0 90px"><span class="dim" style="align-self:center">h</span></div>
+   <div class="frm"><button class="btn pri" id="c_save"></button><span class="dim" id="c_msg" style="align-self:center"></span></div></div>
+  <div class="card note" id="how"></div>
+ </div>
+ <div class="card" style="margin-top:14px"><div class="bar"><b id="log_t"></b><span class="sp"></span><button class="btn sm" id="lpause"></button><button class="btn sm" id="lclear"></button></div>
+  <div style="overflow-x:auto"><table class="log"><thead><tr id="log_h"></tr></thead><tbody id="logb"></tbody></table></div></div>
+</section>
+<footer id="ft"></footer>
+</main>
+<div class="ov" id="ov" hidden><div class="pane" id="pane"></div></div>
 <script>
-const $=s=>document.querySelector(s);
-const _f=window.fetch;window.fetch=(...a)=>_f(...a).then(r=>{if(r.status==401)location.href='/login';return r;});  // session lost -> login
-const T={
- de:{sub:'869,5 MHz · SF7 · liest deine Zähler direkt',wifi:'WLAN',mqtt:'MQTT',radio:'Funk',readers:'Reader',
-  offline:'offline',fw:'Firmware',batt:'Batterie',opt:'Sensor',active:'aktiv',nosig:'kein Signal',
-  imp:'Bezug',exp:'Einspeisung',pow:'Leistung',seen:'Zuletzt',before:'vor',setiv:'Intervall setzen',sec:'Sek.',
-  bedit:'Reihenfolge und Ansicht bearbeiten',bdone:'Bearbeiten beenden',breset:'Zurücksetzen',bhide:'ausblenden',bshow:'einblenden',bdrag:'ziehen zum Sortieren',
-  boxsaveerr:'Layout konnte nicht gespeichert werden (Gateway nicht erreichbar) — bitte erneut versuchen.',
-  del:'Reader löschen',delq:'Reader %i löschen und Binding entfernen?\n\nEr taucht beim nächsten Empfang wieder auf — dann ausgegraut (nicht gebunden).',
-  pending:'nicht gebunden',addrd:'🔗 An Gateway binden',unassign:'Lösen',
-  pendhint:'Wird nur angezeigt — noch nicht an dieses Gateway gebunden.',
-  pairall:'🔗 Alle für 3 Min binden',pairon:'Auto-Binding aktiv — %s s',pairoff:'Neue Reader bleiben ausgegraut, bis du sie bindest.',
-  hideUnb:'Ungebundene ausblenden',unbHidden:'ungebunden ausgeblendet',unbShow:'anzeigen',unbHideAgain:'wieder ausblenden',
-  none:'Noch keine Reader',waiting:'Warte auf einen Reader — Reader-Taste ~10 s halten (echtes Gateway aus).',
-  uuidwait:'UUID noch unbekannt — Reader per Taste neu verbinden',
-  irhint:'Noch keine Messwerte — Reader-Taste einmal kurz drücken, um die Infrarot-Lesung zu starten.',
-  uptime:'Laufzeit',heapfree:'Speicher frei',histfs:'Rohdaten',dailyfs:'Tageswerte',
-  heapwarn:'⚠ Firmware (%s) ist größer als der aktuell freie zusammenhängende Speicherblock (%s) — der Flash-Vorgang wird vermutlich fehlschlagen.\n\nBTHome/MQTT abschalten, Gateway neu starten, dann erneut flashen.',
-  mqcfg:'MQTT-Einstellungen',host:'Server',port:'Port',user:'Benutzer',pass:'Passwort',
-  topic:'Basis-Topic',save:'Speichern',disc:'Discovery senden',discok:'Discovery gesendet ✓',discno:'MQTT nicht verbunden',con:'verbunden',dis:'getrennt',lastpub:'zuletzt gesendet',
-  msgs:'Nachr.',never:'noch nichts',disabled:'deaktiviert',ago:'her',
-  cmdhint:'Intervall per MQTT setzen (Sekunden als Payload):',
-  boot:'Bootloader-Modus — bereit zum Flashen',
-  flash:'Firmware flashen',pick:'Erst eine .bin auswählen',uploading:'lädt hoch…',armed:'bereit — Reader startet neu & zieht',
-  otarun:'OTA läuft',otapass:'Durchgang %n',otaloop:'Reader verwirft das Image?',heapfail:'Zu wenig Speicher: BTHome/MQTT aus, neu starten.',otawarn:'⚠ Reader-Firmware über LoRa flashen — nur mit gültiger .bin. Der Reader validiert vor dem Schreiben.',
-  vnote:'Die Firmware-Version MUSS im Dateinamen stehen, z.B. reader_v55.bin.',
-  novers:'Keine Version im Dateinamen gefunden.\nBitte die richtige Firmware-Version in den Dateinamen schreiben, z.B. reader_v55.bin',
-  vmiss:'Version fehlt im Dateinamen',
-  ren:'Name ändern',abort:'Abbrechen',
-  samever:'Der Reader läuft bereits auf v%v — er akzeptiert dieselbe Version nicht (kein Reflash).\n\nTrotzdem versuchen?'},
- en:{sub:'869.5 MHz · SF7 · reading your meters directly',wifi:'WiFi',mqtt:'MQTT',radio:'Radio',readers:'Readers',
-  offline:'offline',fw:'Firmware',batt:'Battery',opt:'Sensor',active:'active',nosig:'no signal',
-  imp:'Import',exp:'Export',pow:'Power',seen:'Last seen',before:'',setiv:'Set interval',sec:'sec',
-  bedit:'Edit boxes',bdone:'Finish editing',breset:'Reset',bhide:'hide',bshow:'show',bdrag:'drag to reorder',
-  boxsaveerr:'Could not save the layout (gateway unreachable) — please try again.',
-  del:'Delete reader',delq:'Delete reader %i and remove its binding?\n\nIt reappears greyed (unbound) on the next reception.',
-  pending:'not bound',addrd:'🔗 Bind to gateway',unassign:'Unbind',
-  pendhint:'Shown only — not yet bound to this gateway.',
-  pairall:'🔗 Bind all for 3 min',pairon:'Auto-binding active — %s s',pairoff:'New readers stay greyed until you bind them.',
-  hideUnb:'Hide unbound',unbHidden:'unbound hidden',unbShow:'show',unbHideAgain:'hide again',
-  none:'No readers yet',waiting:'Waiting for a reader — hold its button ~10 s (real gateway off).',
-  uuidwait:'UUID unknown yet — reconnect the reader with its button',
-  irhint:'No readings yet — tap the reader button once to start its infrared readout.',
-  uptime:'uptime',heapfree:'free heap',histfs:'raw data',dailyfs:'daily values',
-  heapwarn:'⚠ Firmware (%s) is larger than the currently free contiguous memory block (%s) — flashing will likely fail.\n\nDisable BTHome/MQTT, reboot the gateway, then flash again.',
-  mqcfg:'MQTT settings',host:'Server',port:'Port',user:'User',pass:'Password',
-  topic:'Base topic',save:'Save',disc:'Send discovery',discok:'Discovery sent ✓',discno:'MQTT not connected',con:'connected',dis:'disconnected',lastpub:'last publish',
-  msgs:'msgs',never:'nothing yet',disabled:'disabled',ago:'ago',
-  cmdhint:'Set interval via MQTT (seconds as payload):',
-  boot:'Bootloader mode — ready to flash',
-  flash:'Flash firmware',pick:'Pick a .bin first',uploading:'uploading…',armed:'armed — reader will reset & pull',
-  otarun:'OTA in progress',otapass:'pass %n',otaloop:'reader rejecting the image?',heapfail:'Not enough memory: disable BTHome/MQTT, reboot.',otawarn:'⚠ Flash reader firmware over LoRa — use a valid .bin only. The reader validates before writing.',
-  vnote:'The firmware version MUST be in the filename, e.g. reader_v55.bin.',
-  novers:'No version found in the filename.\nPut the correct firmware version in the filename, e.g. reader_v55.bin',
-  vmiss:'version missing in filename',
-  ren:'Rename',abort:'Cancel',
-  samever:'The reader is already on v%v — it will not accept the same version (no reflash).\n\nTry anyway?'}};
-let lang=localStorage.getItem('lang')||'de',L=T[lang];
-// number format for every kWh/W/€ value: independent of `lang` (the UI TEXT language) -- 0=auto (follow
-// lang, the historical behavior), 1=force EU (1.234,56), 2=force US (1,234.56). Set from /api/status's
-// num_fmt in tick() below; a global gateway setting (Settings page), not a per-page localStorage choice.
-let numFmt=0;
-const numLoc=()=>numFmt===1?'de-DE':numFmt===2?'en-US':(lang=='de'?'de-DE':'en-US');
-function setLang(x){lang=x;L=T[x];localStorage.setItem('lang',x);applyLang();tick();}
-function applyLang(){$('#lde').className=lang=='de'?'act':'';$('#len').className=lang=='en'?'act':'';
- $('#pair_btn').textContent=L.pairall;$('#hideunb_lbl').textContent=L.hideUnb;}
-function rebootGw(){if(!confirm(lang=='de'?'Gateway jetzt neu starten?':'Restart the gateway now?'))return;
- fetch('/api/reboot',{method:'POST'}).catch(()=>{});}
-async function doLogout(){await fetch('/api/logout',{method:'POST'}).catch(()=>{});location.href='/login';}
-async function scanWifi(){$('#wf_msg').textContent=lang=='de'?'suche…':'scanning…';$('#wf_scanb').disabled=true;
- try{let n=await(await fetch('/api/wifi/scan')).json();n.sort((a,b)=>b.rssi-a.rssi);
-  let seen={},opts='<option value="">'+(lang=='de'?'— Netzwerk wählen —':'— pick a network —')+'</option>';
-  for(let x of n){if(!x.ssid||seen[x.ssid])continue;seen[x.ssid]=1;
-   opts+='<option value="'+x.ssid.replace(/"/g,'&quot;')+'">'+x.ssid+' ('+x.rssi+' dBm)'+(x.enc?' 🔒':'')+'</option>';}
-  $('#wf_ssid').innerHTML=opts;$('#wf_msg').textContent=Object.keys(seen).length+(lang=='de'?' Netzwerke':' networks');}
- catch(e){$('#wf_msg').textContent=lang=='de'?'Scan fehlgeschlagen':'scan failed';}
- $('#wf_scanb').disabled=false;}
-function wifiPick(){var v=$('#wf_ssid').value;if(v){$('#wf_manual').value=v;$('#wf_pass').focus();}}
-function wifiSsid(){return $('#wf_manual').value.trim()||$('#wf_ssid').value;}
-async function wifiConnect(){let s=wifiSsid();if(!s){$('#wf_msg').textContent=lang=='de'?'SSID wählen/eingeben':'pick or type an SSID';return;}
- $('#wf_msg').textContent=(lang=='de'?'verbinde mit ':'connecting to ')+s+'…';
- try{await fetch('/api/wifi/connect',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
-  body:'ssid='+encodeURIComponent(s)+'&pass='+encodeURIComponent($('#wf_pass').value)});}catch(e){}
- $('#wf_msg').textContent=(lang=='de'?'verbinde mit ':'connecting to ')+s+' — '+(lang=='de'?'Status oben beachten':'watch the status bar')+'.';}
-function wifiPortal(){fetch('/api/wifi',{method:'POST'}).then(r=>r.json()).then(d=>{
- alert((lang=='de'?'Portal gestartet auf WLAN: ':'Portal started on WiFi: ')+d.ssid+'\n'+(lang=='de'?'Verbinde dich damit und öffne ':'Connect to it and open ')+'http://192.168.4.1/');}).catch(()=>{});}
-const nf=n=>n.toLocaleString(numLoc());
-function val(v,unit){return v===null?`<span class="v na">–</span>`:`<span class="v">${nf(v)}${unit?' <small>'+unit+'</small>':''}</span>`}
-// import/export come as raw Wh -> show kWh (raw/1000) with 3 decimals
-function valE(v){return v===null?`<span class="v na">–</span>`:`<span class="v">${(v/1000).toLocaleString(numLoc(),{minimumFractionDigits:3,maximumFractionDigits:3})} <small>kWh</small></span>`}
-function bcol(p){return p>50?'var(--accent)':p>20?'var(--amber)':'var(--red)'}
-function fmt(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return (d?d+'d ':'')+(h?h+'h ':'')+m+'m'}
-function fmtKB(n){return n==null?'?':(n/1024).toFixed(0)+' KB'}
-let cfgLoaded=false;
-let lastStatus=null;   // cached /api/status, so file-picker checks don't need their own fetch
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const _f=window.fetch;window.fetch=(...a)=>_f(...a).then(r=>{if(r.status==401)location.href='/login';return r;});
+const post=(u,b)=>fetch(u,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(b||{})});
+const T={de:{
+ hist:'Verlauf',radio:'OBI-Funk',set:'Einstellungen',dbg:'Debug',reboot:'Neustart',logout:'Abmelden',rebootq:'Gateway jetzt neu starten?',
+ tstrom:'Stromzähler',tfunk:'Funkgeräte',tempf:'Empfang',wifi:'WLAN',mqtt:'MQTT',off:'offline',dis:'aus',msgs:'Nachr.',
+ pairall:'Alle Lesegeräte 3 Min. binden',pairon:'Auto-Binden aktiv – noch %s s',pairoff:'Neue Lesegeräte bleiben ausgegraut, bis du sie bindest.',
+ hideUnb:'Ungebundene ausblenden',unbHidden:'ungebunden ausgeblendet',unbShow:'anzeigen',unbHideAgain:'wieder ausblenden',
+ waiting:'Noch kein OBI-Lesegerät. Taste am Lesekopf ~10 s halten (originales Gateway ausschalten).',
+ imp:'Bezug',exp:'Einspeisung',pow:'Leistung',batt:'Batterie',opt:'Optik',active:'aktiv',nosig:'kein Signal',seen:'Zuletzt',ago:'vor',
+ pending:'nicht gebunden',bind:'An dieses Gateway binden',pendhint:'Nur sichtbar – noch nicht an dieses Gateway gebunden.',
+ uuidwait:'UUID noch unbekannt – Lesekopf per Taste neu verbinden',boot:'Bootloader-Modus – bereit zum Flashen',
+ irhint:'Noch keine Messwerte – Taste am Lesekopf einmal kurz drücken, um die Infrarot-Lesung zu starten.',
+ edit:'Bearbeiten',done:'Fertig',delS:'Löschen',reset:'Zurücksetzen',hide:'ausblenden',show:'einblenden',del:'Lesegerät löschen',
+ delq:'Lesegerät %i löschen und Bindung entfernen?\n\nEs taucht beim nächsten Empfang ausgegraut wieder auf.',boxerr:'Layout konnte nicht gespeichert werden – bitte erneut versuchen.',
+ sec:'Sek.',setiv:'Setzen',adv:'Lesekopf-Firmware über LoRa flashen',flash:'Flashen',pick:'Erst eine .bin auswählen',uploading:'lädt hoch…',
+ armed:'bereit – Lesekopf startet neu und lädt',otarun:'OTA läuft',otapass:'Durchgang %n',otaloop:'Lesekopf verwirft das Image?',heapfail:'Zu wenig Speicher: BTHome/MQTT aus, neu starten.',
+ otawarn:'⚠ Lesekopf-Firmware über LoRa flashen – nur mit gültiger .bin. Der Lesekopf prüft vor dem Schreiben.',vnote:'Die Firmware-Version MUSS im Dateinamen stehen, z. B. reader_v55.bin.',
+ novers:'Keine Version im Dateinamen gefunden.\nBitte z. B. reader_v55.bin benennen.',vmiss:'Version fehlt im Dateinamen',file:'Datei',
+ samever:'Der Lesekopf läuft bereits auf v%v – dieselbe Version wird nicht erneut geflasht.\n\nTrotzdem versuchen?',
+ heapwarn:'⚠ Firmware (%s) ist größer als der freie zusammenhängende Speicher (%s) – Flashen schlägt vermutlich fehl.\n\nBTHome/MQTT abschalten, neu starten, erneut flashen.',
+ uptime:'Laufzeit',heap:'Speicher frei',histfs:'Rohdaten',dailyfs:'Tageswerte',
+ search:'Suchen: Name, ID, Hersteller, Typ …',all:'Alle',cmeter:'Zähler',chca:'Heizkosten',csmoke:'Rauchmelder',cwx:'Wetter',clw:'LoRaWAN',cother:'Sonstige',
+ onlysel:'nur an HA gesendete',srt:'Sortieren: Signal',sage:'Sortieren: zuletzt gesehen',sname:'Sortieren: Name',
+ hDev:'Gerät',hMfr:'Hersteller',hVal:'Wert',hSig:'Signal',hSeen:'Zuletzt',hStat:'Daten',nodev:'Noch keine Funkgeräte empfangen. Heizkostenverteiler senden alle paar Minuten, Rauchmelder teils nur wenige Male am Tag.',
+ tooHA:'An Home Assistant / MQTT senden',keyS:'Schlüssel',paired:'gekoppelt',enc:'verschlüsselt',keyok:'entschlüsselt',plain:'unverschlüsselt',nokey:'Schlüssel fehlt',badkey:'falscher Schlüssel',unsup:'nicht unterstützt',
+ funknote:'Schalter = Gerät wird per MQTT an <b>&lt;base&gt;/wmbus|weather|lorawan/…</b> gesendet und erscheint in Home Assistant. Verschlüsselte Zähler brauchen den <b>AES-Schlüssel</b> vom Messdienst (Minol, Zenner, Techem, ista …). LoRaWAN-Nutzdaten nur mit den Session-Keys des eigenen Geräts.',
+ values:'Messwerte',tech:'Technik',raw:'Rohdaten',name:'Name',save:'Speichern',key:'AES-Schlüssel (32 Hex-Zeichen)',keyset:'Schlüssel setzen',keydel:'Schlüssel löschen',
+ lwkeys:'Session-Keys (z. B. aus der TTN-Konsole)',forget:'Gerät vergessen',forgetq:'Gerät vergessen? Es erscheint beim nächsten Empfang neu (ohne Name/Schlüssel).',
+ novals:'Keine Messwerte.',novalsEnc:'Das Gerät sendet verschlüsselt. Mit dem AES-Schlüssel siehst du alle Werte im Klartext.',novalsBad:'Der Schlüssel passt nicht (Prüfbytes fehlen).',
+ novalsCache:'Rohdaten nicht mehr im Speicher – beim nächsten Telegramm wieder da (für Geräte mit HA-Schalter immer).',novalsMfr:'Herstellereigenes Format – nur Rohdaten.',
+ nolw:'Ohne Session-Keys sind nur Adresse, Zähler und Signal sichtbar.',close:'Schließen',xp:'experimentell',
+ air:'Funkzeit des SX1262 seit Start bzw. Reset',stReset:'Statistik zurücksetzen',cfg:'Was soll das Gateway hören?',
+ obi:'OBI-Gateway (Lesekopf am Stromzähler) – hat immer Vorrang',l0:'wM-Bus T1/C1 · 868,95 MHz',l0d:'Heizkostenverteiler, Rauchmelder, Wasser-/Wärmezähler (die meisten Geräte)',
+ l1:'wM-Bus S1 · 868,3 MHz',l1d:'ältere Zähler im S-Modus',l2:'Bresser-Wetterstationen',l2d:'5-in-1, 6-in-1, 7-in-1 (868,3 MHz)',l3:'LaCrosse / TFA (IT+)',l3d:'Thermo-/Hygrosensoren TX29, TX35 …',
+ l4:'LoRaWAN-Monitor',l4d:'Kanäle und Spreading-Factors werden reihum abgehört',sfhint:'SF11/12 nur ohne OBI (Pakete zu lang)',
+ win:'OBI-Hörfenster nach Beacon',avh:'In HA „nicht verfügbar“ nach',saved:'gespeichert ✓',
+ how:'<b>So teilt sich der Funkchip auf:</b> Der SX1262 hört immer nur eine Modulation. Jede Sekunde sendet das Gateway den OBI-Beacon und hört das Hörfenster lang auf LoRa (verlängert sich bei OBI-Verkehr). Den Rest der Sekunde bekommt ein Empfänger: wM-Bus T1/C1 jede zweite Sekunde, die anderen reihum. ~30 ms vor dem nächsten Beacon geht es zurück auf LoRa.<br><br>Komplett auf OBI bleibt der Chip beim Koppeln, beim Lesekopf-Update, im „Alle binden“-Fenster, in den ersten 2 Minuten nach dem Start und rund um jeden fälligen Zählerstand des Lesekopfs.<br><br><b>Je weniger Empfänger aktiv sind, desto mehr Zeit bekommt jeder.</b> Fehlen OBI-Werte, das Hörfenster erhöhen („max. OBI-Versatz“ sollte deutlich darunter liegen).',
+ logt:'Live-Log (Funkgeräte)',pause:'Pause',resume:'Weiter',clear:'Leeren',lh:['Alter','Empfänger','Gerät','RSSI','Länge','Bytes'],crc:'CRC-Fehler',
+ sOk:'Telegramme ok',sCrc:'CRC-Fehler',sObi:'OBI-Pakete',sOff:'OBI-Versatz zuletzt / max',sSw:'Umschaltungen',sErr:'Fehler',sDrop:'verworfen'},
+en:{}};
+// English: only the UI chrome differs, device value labels come from the firmware in German
+Object.assign(T.en,T.de,{hist:'History',radio:'OBI radio',set:'Settings',dbg:'Debug',reboot:'Reboot',logout:'Log out',rebootq:'Restart the gateway now?',
+ tstrom:'Power meters',tfunk:'Radio devices',tempf:'Reception',wifi:'WiFi',off:'offline',dis:'off',msgs:'msgs',
+ pairall:'Bind all readers for 3 min',pairon:'Auto-binding active – %s s left',pairoff:'New readers stay greyed until you bind them.',
+ hideUnb:'Hide unbound',unbHidden:'unbound hidden',unbShow:'show',unbHideAgain:'hide again',waiting:'No OBI reader yet. Hold the reader button ~10 s (switch the original gateway off).',
+ imp:'Import',exp:'Export',pow:'Power',batt:'Battery',opt:'Optical',active:'active',nosig:'no signal',seen:'Last seen',ago:'',
+ pending:'not bound',bind:'Bind to this gateway',pendhint:'Shown only – not bound to this gateway yet.',uuidwait:'UUID unknown – reconnect the reader with its button',
+ boot:'Bootloader mode – ready to flash',irhint:'No readings yet – tap the reader button once to start the infrared readout.',
+ edit:'Edit',done:'Done',delS:'Delete',reset:'Reset',hide:'hide',show:'show',del:'Delete reader',
+ delq:'Delete reader %i and remove its binding?\n\nIt reappears greyed on the next reception.',boxerr:'Could not save the layout – please try again.',
+ sec:'sec',setiv:'Set',adv:'Flash reader firmware over LoRa',flash:'Flash',pick:'Pick a .bin first',uploading:'uploading…',armed:'armed – reader resets & pulls',
+ otarun:'OTA running',otapass:'pass %n',otaloop:'reader rejecting the image?',heapfail:'Not enough memory: disable BTHome/MQTT, reboot.',
+ otawarn:'⚠ Flash reader firmware over LoRa – valid .bin only. The reader validates before writing.',vnote:'The firmware version MUST be in the file name, e.g. reader_v55.bin.',
+ novers:'No version in the file name.\nName it e.g. reader_v55.bin.',vmiss:'version missing in file name',file:'File',
+ samever:'The reader already runs v%v – the same version is not reflashed.\n\nTry anyway?',
+ heapwarn:'⚠ Firmware (%s) is larger than the free contiguous memory (%s) – flashing will likely fail.\n\nDisable BTHome/MQTT, reboot, flash again.',
+ uptime:'uptime',heap:'free heap',histfs:'raw data',dailyfs:'daily values',search:'Search: name, ID, manufacturer, type …',all:'All',cmeter:'Meters',chca:'Heat cost',
+ csmoke:'Smoke detectors',cwx:'Weather',cother:'Other',onlysel:'sent to HA only',srt:'Sort: signal',sage:'Sort: last seen',sname:'Sort: name',
+ hDev:'Device',hMfr:'Manufacturer',hVal:'Value',hSig:'Signal',hSeen:'Last seen',hStat:'Data',nodev:'No radio devices yet. Heat cost allocators send every few minutes, smoke detectors sometimes only a few times a day.',tooHA:'Send to Home Assistant / MQTT',keyS:'key',paired:'paired',
+ enc:'encrypted',keyok:'decrypted',plain:'unencrypted',nokey:'key missing',badkey:'wrong key',unsup:'unsupported',values:'Readings',tech:'Technical',raw:'Raw data',
+ name:'Name',save:'Save',key:'AES key (32 hex digits)',keyset:'Set key',keydel:'Delete key',lwkeys:'Session keys (e.g. from the TTN console)',forget:'Forget device',
+ forgetq:'Forget this device? It reappears on the next reception (without name/key).',novals:'No readings.',novalsEnc:'Encrypted. Enter the AES key to see all readings.',
+ novalsBad:'The key does not match.',novalsCache:'Raw data no longer cached – back with the next telegram.',novalsMfr:'Manufacturer format – raw data only.',
+ nolw:'Without session keys only address, counter and signal are visible.',close:'Close',xp:'experimental',air:'SX1262 airtime since boot / reset',stReset:'Reset statistics',
+ cfg:'What should the gateway listen to?',obi:'OBI gateway (meter reader) – always has priority',sfhint:'SF11/12 only without OBI (frames too long)',
+ win:'OBI listen window after beacon',avh:'Unavailable in HA after',saved:'saved ✓',logt:'Live log (radio devices)',pause:'Pause',resume:'Resume',clear:'Clear',
+ lh:['Age','Listener','Device','RSSI','Length','Bytes'],crc:'CRC error',sOk:'Telegrams ok',sCrc:'CRC errors',sObi:'OBI frames',sOff:'OBI offset last / max',sSw:'Switches',sErr:'errors',sDrop:'dropped'});
+let lang=localStorage.getItem('lang')||'de',L=T[lang],numFmt=0;
+const loc=()=>numFmt===1?'de-DE':numFmt===2?'en-US':(lang=='de'?'de-DE':'en-US');
+const nf=(n,d)=>Number(n).toLocaleString(loc(),d==null?undefined:{minimumFractionDigits:d,maximumFractionDigits:d});
+const age=s=>s==null?'–':s<60?s+' s':s<3600?Math.floor(s/60)+' min':s<86400?(s/3600).toFixed(1)+' h':(s/86400).toFixed(1)+' d';
+const kb=n=>n==null?'?':Math.round(n/1024)+' KB';
+const dur=s=>{const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return (d?d+'d ':'')+(h?h+'h ':'')+m+'m'};
+/* ---------------- tabs + language ---------------- */
+let tab=(location.hash||'#strom').slice(1);if(!['strom','funk','empfang'].includes(tab))tab='strom';
+function showTab(t){tab=t;$$('nav.tabs a').forEach(a=>a.classList.toggle('on',a.dataset.t===t));['strom','funk','empfang'].forEach(x=>$('#s_'+x).hidden=x!==t);
+ if(t!=='strom')loadUnl();if(t==='empfang')pollLog();}
+window.addEventListener('hashchange',()=>showTab(location.hash.slice(1)||'strom'));
+function applyLang(){L=T[lang];document.documentElement.lang=lang;$('#lde').className=lang=='de'?'on':'';$('#len').className=lang=='en'?'on':'';
+ [['#t_hist','hist'],['#t_radio','radio'],['#t_set','set'],['#t_dbg','dbg'],['#t_reboot','reboot'],['#t_logout','logout']].forEach(([s,k])=>$(s+' .lb').textContent=L[k]);
+ $('[data-t=strom]').innerHTML=L.tstrom+'<span class="n" id="n_strom"></span>';$('[data-t=funk]').innerHTML=L.tfunk+'<span class="n" id="n_funk"></span>';$('[data-t=empfang]').textContent=L.tempf;
+ $('#pair_btn').textContent=L.pairall;$('#hideunb_lbl').textContent=L.hideUnb;$('#q').placeholder=L.search;$('#onlysel_l').textContent=L.onlysel;
+ $('#sort').innerHTML=[['rssi',L.srt],['age',L.sage],['name',L.sname]].map(([v,t])=>`<option value="${v}">${t}</option>`).join('');$('#sort').value=sortBy;
+ $('#funk_note').innerHTML=L.funknote;$('#air_t').textContent=L.air;$('#st_reset').textContent=L.stReset;$('#cfg_t').textContent=L.cfg;$('#win_l').textContent=L.win;
+ $('#avh_l').textContent=L.avh;$('#c_save').textContent=L.save;$('#how').innerHTML=L.how;$('#log_t').textContent=L.logt;$('#lpause').textContent=logPaused?L.resume:L.pause;
+ $('#lclear').textContent=L.clear;$('#log_h').innerHTML=L.lh.map(h=>`<th>${h}</th>`).join('');cfgDrawn=false;renderCats();}
+$('#lde').onclick=()=>{lang='de';localStorage.setItem('lang',lang);applyLang();tick();renderUnl();};
+$('#len').onclick=()=>{lang='en';localStorage.setItem('lang',lang);applyLang();tick();renderUnl();};
+$('#t_reboot').onclick=()=>{if(confirm(L.rebootq))post('/api/reboot').catch(()=>{});};
+$('#t_logout').onclick=async()=>{await post('/api/logout').catch(()=>{});location.href='/login';};
+/* ---------------- OBI readers (status + cards) ---------------- */
+let lastStatus=null,_rs=[],editId=null,uploading=false,_hideUnbound=false,_revealTmp=false,_pairActive=false;
 async function tick(){try{
- const st=await (await fetch('/api/status')).json(), rs=await (await fetch('/api/readers')).json();_rs=rs;
- lastStatus=st;numFmt=st.num_fmt||0;
- $('#logout_btn').style.display=(st.auth&&st.auth.enabled)?'':'none';   // only show logout when a login is required
- $('#sub').textContent='OBI Gateway '+(st.gw||st.gwid).toUpperCase();
- $('#gw').textContent=st.gwid_ascii+' · '+(st.mac||st.gwid);
- const hf=st.hist_fs;
- const fsTxt=hf&&hf.ok?' · '+L.histfs+' '+fmtKB(hf.total-hf.used)+'/'+fmtKB(hf.total)+' · '+L.dailyfs+' '+fmtKB(hf.daily_total-hf.daily_used)+'/'+fmtKB(hf.daily_total):'';
- $('#ft').textContent=L.uptime+' '+fmt(st.uptime_s)+' · '+L.heapfree+' '+fmtKB(st.max_alloc_heap)+(st.fw?' · fw '+st.fw.version+' ('+st.fw.target+')':'')+fsTxt;
- const q=st.mqtt;
- const mqp=!q.enabled?`<span class="dot idle"></span>${L.disabled}`
-  :q.connected?`<span class="dot on"></span>${q.host} · ${q.pub_count} ${L.msgs} · ${q.last_pub_s<0?L.never:L.lastpub+' '+q.last_pub_s+'s '+L.ago}`
-  :`<span class="dot off"></span>${q.host} · ${q.state}`;
- $('#bar').innerHTML=[
-  [L.wifi,st.wifi?`<span class="dot on"></span>${st.ip} · ${st.wifi_rssi} dBm`:`<span class="dot off"></span>${L.offline}`],
-  [L.mqtt,mqp],
-  [L.radio,`<span class="dot on"></span>${st.freq_mhz} MHz · SF${st.sf} · BW${st.bw_khz}`],
-  [L.readers,`<b>${rs.length}</b>`]
- ].concat(st.temp_c!=null?[['Temp',`<b>${st.temp_c} °C</b>`]]:[])
-  .map(p=>`<div class="pill"><span class="k">${p[0]}</span>${p[1]}</div>`).join('');
+ const st=await(await fetch('/api/status')).json(),rs=await(await fetch('/api/readers')).json();_rs=rs;lastStatus=st;numFmt=st.num_fmt||0;
+ $('#t_logout').hidden=!(st.auth&&st.auth.enabled);
+ $('#gwname').textContent=st.gw_custom_name||('Gateway '+(st.gw||st.gwid||'').toUpperCase());
+ const q=st.mqtt||{};
+ const chips=[[st.wifi?'on':'off',L.wifi,st.wifi?`${st.ip} · ${st.wifi_rssi} dBm`:L.off],
+  [!q.enabled?'':q.connected?'on':'off','MQTT',!q.enabled?L.dis:q.connected?`${q.pub_count} ${L.msgs}`:q.state],
+  ['on','OBI',`${st.freq_mhz} MHz · SF${st.sf}`,'opt']];
+ if(st.temp_c!=null)chips.push(['','',st.temp_c+' °C','opt']);
+ $('#chips').innerHTML=chips.map(c=>`<span class="chip ${c[3]||''}"><span class="dot ${c[0]}"></span>${c[1]?'<b>'+c[1]+'</b>':''}<span class="dim">${esc(c[2])}</span></span>`).join('');
+ $('#n_strom')&&($('#n_strom').textContent=rs.length);
  $('#pair_st').textContent=st.pair_remaining_s>0?L.pairon.replace('%s',st.pair_remaining_s):L.pairoff;
- // hide-unbound view: reflect the persisted flag + pairing state, update the toggle + the "N hidden · show" badge
- _hideUnbound=!!st.hide_unbound; _pairActive=st.pair_remaining_s>0;
- { const cb=$('#hideunb_cb'); if(cb&&document.activeElement!==cb) cb.checked=_hideUnbound;   // don't fight an in-flight click
-   const nUnb=rs.filter(r=>!r.assigned).length; let badge='';
-   const tog=$('.hidetog'); if(tog) tog.style.display=nUnb>0?'':'none';   // only show the toggle when there ARE unbound readers to hide
-   if(_hideUnbound&&nUnb>0&&!_pairActive)
-     badge=_revealTmp?`<a onclick="hideUnboundAgain();return false" href="#">${L.unbHideAgain}</a>`
-                     :`${nUnb} ${L.unbHidden} · <a onclick="revealUnbound();return false" href="#">${L.unbShow}</a>`;
-   $('#hideunb_badge').innerHTML=badge; }
- // don't blow away a reader card while its interval/file input is focused (you'd never finish typing);
- // editId (unified edit mode) freezes the redraw too: the name input + box drag/drop mutate the DOM/_rs in place,
- // so a 1-s tick must not rebuild over it
- const ae=document.activeElement, editing=editId!==null||(ae&&/^(iv_|fw_)/.test(ae.id||''));
- if(!editing && !uploading){const vis=visRs(rs);
-  $('#list').innerHTML=vis.length?vis.map(card).join(''):(rs.length?'':`<div class="card"><div class="hd"><span class="id">—</span></div><div class="uuid" style="border:0;background:0">${L.waiting}</div></div>`);}
- if(st.ota&&st.ota.active){const el=$('#op_'+st.ota.target);if(el){const o=st.ota,at=o.pos!=null?o.pos:o.served,p=o.size?Math.min(100,Math.max(0,Math.round(at/o.size*100))):0;
-  // pass >1: reader re-pulls, it rejected the image
+ _hideUnbound=!!st.hide_unbound;_pairActive=st.pair_remaining_s>0;
+ const cb=$('#hideunb_cb');if(document.activeElement!==cb)cb.checked=_hideUnbound;
+ const nU=rs.filter(r=>!r.assigned).length;$('#hideunb_w').style.display=nU?'':'none';
+ $('#hideunb_badge').innerHTML=_hideUnbound&&nU&&!_pairActive?(_revealTmp?`<a href="#" id="unb_hide">${L.unbHideAgain}</a>`:`${nU} ${L.unbHidden} · <a href="#" id="unb_show">${L.unbShow}</a>`):'';
+ const hf=st.hist_fs;
+ $('#ft').textContent=`${L.uptime} ${dur(st.uptime_s)} · ${L.heap} ${kb(st.max_alloc_heap)}`+(st.fw?` · ObiUnlocked ${st.fw.version} (${st.fw.target})`:'')+
+  (hf&&hf.ok?` · ${L.histfs} ${kb(hf.total-hf.used)}/${kb(hf.total)} · ${L.dailyfs} ${kb(hf.daily_total-hf.daily_used)}/${kb(hf.daily_total)}`:'')+` · ${st.gwid_ascii||''} ${st.mac||''}`;
+ const ae=document.activeElement,busy=editId!==null||(ae&&/^(iv_|fw_)/.test(ae.id||''));
+ if(!busy&&!uploading)drawReaders();
+ if(st.ota&&st.ota.active){const el=$('#op_'+st.ota.target);if(el){const o=st.ota,at=o.pos!=null?o.pos:o.served,p=o.size?Math.min(100,Math.round(at/o.size*100)):0;
   el.textContent=L.otarun+' '+p+'%'+(o.pass>1?' · '+L.otapass.replace('%n',o.pass):'')+(o.pass>2?' — '+L.otaloop:'');}}
 }catch(e){}}
-// ---- dashboard metric boxes: order + visibility, editable per reader, persisted server-side (NVS) ----
-let editId=null;                           // reader whose card is in the unified edit mode (name + boxes); only one at a time
-const BOXES=['imp','exp','pow','batt','opt','seen'];   // canonical order + the only valid box keys
-function boxInner(k,r){                     // the label + value markup for one box (was inline in card())
- if(k=='imp') return `<div class="l">${L.imp}</div>${valE(r.import)}`;
- if(k=='exp') return `<div class="l">${L.exp}</div>${valE(r.export)}`;
- if(k=='pow') return `<div class="l">${L.pow}</div>${val(r.power,'W')}`;
- if(k=='batt'){const p=Math.max(0,Math.min(100,Math.round((r.battery_mV-2400)/8)));
-  return `<div class="l">${L.batt}</div><span class="v">${(r.battery_mV/1000).toFixed(2)} <small>V</small></span><div class="batt"><i style="width:${p}%;background:${bcol(p)}"></i></div>`;}
- if(k=='opt'){const sens=r.infrared?`<span class="dot on"></span>${L.active}`:`<span class="dot idle"></span>${L.nosig}`;
-  return `<div class="l">${L.opt}</div><span class="v" style="font-size:13px">${sens}</span>`;}
- if(k=='seen') return `<div class="l">${L.seen}</div><span class="v">${L.before} ${r.age_s}s</span>`;
- return '';
-}
-// Parse r.boxcfg ("imp,-exp,pow,…") -> [{key,vis}]. Unknown/dup keys dropped; any missing box appended visible
-// (so a partial/legacy config still shows every box). Empty cfg = default order, all visible.
-function boxOrder(r){
- const seen={},out=[];
- (r.boxcfg||'').split(',').forEach(t=>{t=t.trim();if(!t)return;
-  const vis=t[0]!=='-',key=vis?t:t.slice(1);
-  if(BOXES.includes(key)&&!seen[key]){seen[key]=1;out.push({key,vis});}});
- BOXES.forEach(key=>{if(!seen[key])out.push({key,vis:true});});
- return out;
-}
-function mxHtml(r){
- const ord=boxOrder(r);
- if(editId!==r.id) return ord.filter(b=>b.vis).map(b=>`<div class="mc">${boxInner(b.key,r)}</div>`).join('');
- return ord.map(b=>`<div class="mc edit${b.vis?'':' hid'}" draggable="true"
-   ondragstart="boxDrag(event,'${r.id}','${b.key}')" ondragover="boxOver(event)" ondragleave="boxLeave(event)" ondrop="boxDrop(event,'${r.id}','${b.key}')" ondragend="boxEnd(event)">
-   <span class="bh" title="${L.bdrag}">⋮⋮</span>
-   <button class="be" title="${b.vis?L.bhide:L.bshow}" onclick="boxVis('${r.id}','${b.key}')">${b.vis?'👁':'🚫'}</button>
-   ${boxInner(b.key,r)}</div>`).join('');
-}
+const visRs=l=>(_hideUnbound&&!_revealTmp&&!_pairActive)?l.filter(r=>r.assigned):l;
+function drawReaders(){const v=visRs(_rs);$('#list').innerHTML=v.length?v.map(card).join(''):(_rs.length?'':`<div class="card empty">${L.waiting}</div>`);}
+$('#hideunb_cb').onchange=async e=>{_revealTmp=false;await post('/api/hideunbound?on='+(e.target.checked?1:0)).catch(()=>{});tick();};
+$('#hideunb_badge').onclick=e=>{if(e.target.id==='unb_show'){_revealTmp=true;}else if(e.target.id==='unb_hide'){_revealTmp=false;}else return;e.preventDefault();tick();};
+$('#pair_btn').onclick=async()=>{await post('/api/pairall');tick();};
+const BOXES=['imp','exp','pow','batt','opt','seen'];
+const val=(v,u)=>v===null?'<div class="v na">–</div>':`<div class="v">${nf(v)}${u?'<small>'+u+'</small>':''}</div>`;
+const valE=v=>v===null?'<div class="v na">–</div>':`<div class="v">${nf(v/1000,3)}<small>kWh</small></div>`;
+const bcol=p=>p>50?'var(--ac)':p>20?'var(--am)':'var(--rd)';
+function boxInner(k,r){
+ if(k=='imp')return`<div class="l">${L.imp}</div>${valE(r.import)}`;
+ if(k=='exp')return`<div class="l">${L.exp}</div>${valE(r.export)}`;
+ if(k=='pow')return`<div class="l">${L.pow}</div>${val(r.power,'W')}`;
+ if(k=='batt'){const p=Math.max(0,Math.min(100,Math.round((r.battery_mV-2400)/8)));return`<div class="l">${L.batt}</div><div class="v">${(r.battery_mV/1000).toFixed(2)}<small>V</small></div><div class="batt"><i style="width:${p}%;background:${bcol(p)}"></i></div>`;}
+ if(k=='opt')return`<div class="l">${L.opt}</div><div class="v" style="font-size:13.5px"><span class="dot ${r.infrared?'on':''}" style="display:inline-block;margin-right:6px"></span>${r.infrared?L.active:L.nosig}</div>`;
+ if(k=='seen')return`<div class="l">${L.seen}</div><div class="v">${L.ago} ${age(r.age_s)}</div>`;return'';}
+function boxOrder(r){const seen={},out=[];(r.boxcfg||'').split(',').forEach(t=>{t=t.trim();if(!t)return;const vis=t[0]!=='-',key=vis?t:t.slice(1);
+ if(BOXES.includes(key)&&!seen[key]){seen[key]=1;out.push({key,vis});}});BOXES.forEach(key=>{if(!seen[key])out.push({key,vis:true});});return out;}
+function tilesHtml(r){const o=boxOrder(r);if(editId!==r.id)return o.filter(b=>b.vis).map(b=>`<div class="tile">${boxInner(b.key,r)}</div>`).join('');
+ return o.map(b=>`<div class="tile edit${b.vis?'':' hid'}" draggable="true" data-rid="${r.id}" data-box="${b.key}"><span class="bh">⋮⋮</span><button class="be" data-act="vis" data-rid="${r.id}" data-box="${b.key}">${b.vis?L.hide:L.show}</button>${boxInner(b.key,r)}</div>`).join('');}
+function card(r){const nm=r.name?esc(r.name):'',ed=editId===r.id,id=r.id;
+ const iv=[['Live',1],['10s',10],['30s',30],['60s',60],['120s',120],['300s',300]];
+ return`<div class="card rc${r.assigned?'':' pend'}"><div class="rh">
+  ${ed?`<input id="nm_${id}" maxlength="24" value="${esc(r.name||'')}" placeholder="${id.toUpperCase()}" style="font-size:16px;font-weight:600;width:220px">`:`<span class="nm">${nm||id.toUpperCase()}</span>`}
+  <span class="tag info">${esc(r.type)}</span>${r.assigned?'':`<span class="tag warn">${L.pending}</span>`}
+  <span class="meta">${nm?id.toUpperCase()+' · ':''}FW ${r.softver} · HW ${r.hardver}${r.legacy?' · legacy':''} · ${r.rssi} dBm · ${r.snr} dB${r.paired?' · '+L.paired:''}</span><span class="sp"></span>
+  <button class="ib${ed?' on':''}" data-act="edit" data-rid="${id}">${ed?L.done:L.edit}</button><button class="ib del" data-act="del" data-rid="${id}" ${ed?'disabled':''}>${L.delS}</button></div>
+ <div class="uuid">${r.uuid?'UUID '+r.uuid:L.uuidwait}</div>${r.bootloader?`<div class="boot">${L.boot}</div>`:''}
+ <div class="tiles">${tilesHtml(r)}</div>${ed?`<div class="ctl"><button class="btn sm" data-act="breset" data-rid="${id}">${L.reset}</button></div>`:''}
+ ${r.assigned?`<div class="ctl"><div class="ivseg">${iv.map(q=>`<button class="${r.interval==q[1]?'on':''}" data-act="ivq" data-rid="${id}" data-s="${q[1]}">${q[0]}</button>`).join('')}<input type="number" id="iv_${id}" placeholder="${L.sec}" min="1" max="9999" value="${r.interval||''}"><button class="set" id="setb_${id}" hidden data-act="iv" data-rid="${id}">${L.setiv}</button></div></div>
+  <details class="adv"><summary>${L.adv}</summary><div class="ctl"><input type="file" id="fw_${id}" accept=".bin" style="flex:1 1 220px"><button class="btn" data-act="ota" data-rid="${id}" data-cur="${r.softver||0}">${L.flash}</button><span class="dim" id="op_${id}"></span></div></details>`
+ :`<div class="ctl"><button class="btn pri" data-act="bind" data-rid="${id}">${L.bind}</button><span class="dim">${L.pendhint}</span></div>`}
+ ${r.assigned&&!r.has_data&&!r.bootloader?`<div class="hint">${L.irhint}</div>`:''}</div>`;}
+async function saveBox(id,cfg){for(let i=0;i<3;i++){try{const r=await post('/api/boxcfg?id='+id+'&cfg='+encodeURIComponent(cfg));if(r.ok)return;}catch(e){}await new Promise(s=>setTimeout(s,500));}alert(L.boxerr);}
+function commitBox(r,o){const c=o.map(b=>(b.vis?'':'-')+b.key).join(',');r.boxcfg=c;saveBox(r.id,c);drawReaders();}
+function saveName(id){const el=$('#nm_'+id);if(!el)return;const v=el.value.trim().slice(0,24),r=_rs.find(x=>x.id===id);
+ if(r&&v!==(r.name||'')){r.name=v;post('/api/name?id='+id+'&name='+encodeURIComponent(v)).catch(()=>{});}}
+function toggleEdit(id){if(editId===id){saveName(id);editId=null;drawReaders();}else{if(editId)saveName(editId);editId=id;drawReaders();const el=$('#nm_'+id);if(el){el.focus();el.select();}}}
+const heapWarn=sz=>lastStatus&&lastStatus.max_alloc_heap!=null&&sz>lastStatus.max_alloc_heap?L.heapwarn.replace('%s',kb(sz)).replace('%s',kb(lastStatus.max_alloc_heap)):null;
+async function doOta(id,cur){const f=$('#fw_'+id).files[0],op=$('#op_'+id);if(!f){op.textContent=L.pick;return;}
+ const hw=heapWarn(f.size);if(hw&&!confirm(hw))return;const vm=[...f.name.matchAll(/v(\d+)/g)].pop();if(!vm){alert(L.novers);op.textContent=L.vmiss;return;}
+ const ver=parseInt(vm[1])&255;if(!confirm(L.otawarn+'\n\n'+L.vnote+'\n\nReader: '+id.toUpperCase()+'\n'+L.file+': '+f.name+'\nVersion: v'+ver))return;
+ if(cur&&ver===cur&&!confirm(L.samever.replace('%v',ver)))return;
+ const buf=await f.arrayBuffer(),fd=new FormData();fd.append('fw',new Blob([buf]),f.name);uploading=true;op.textContent=L.uploading;
+ try{const r=await(await fetch('/api/ota?id='+id+'&size='+buf.byteLength+'&ver='+ver,{method:'POST',body:fd})).json();op.textContent=r.ok?L.armed:(r.error=='heap'?L.heapfail:'error');}
+ catch(e){op.textContent='error';}uploading=false;}
+const list=$('#list');
+list.addEventListener('click',async e=>{const b=e.target.closest('[data-act]');if(!b)return;const id=b.dataset.rid,r=_rs.find(x=>x.id===id),a=b.dataset.act;
+ if(a==='edit')toggleEdit(id);
+ else if(a==='del'){if(confirm(L.delq.replace('%i',id.toUpperCase()))){await post('/api/delete?id='+id);tick();}}
+ else if(a==='vis'){const o=boxOrder(r),x=o.find(q=>q.key===b.dataset.box);x.vis=!x.vis;commitBox(r,o);}
+ else if(a==='breset'){r.boxcfg='';saveBox(id,'');drawReaders();}
+ else if(a==='ivq'){await post('/api/interval?id='+id+'&seconds='+b.dataset.s);tick();}
+ else if(a==='iv'){const v=$('#iv_'+id).value;if(v){await post('/api/interval?id='+id+'&seconds='+v);tick();}}
+ else if(a==='bind'){await post('/api/assign?id='+id+'&on=1');tick();}
+ else if(a==='ota')doOta(id,+b.dataset.cur);});
+list.addEventListener('input',e=>{const m=/^iv_(.+)/.exec(e.target.id);if(m)$('#setb_'+m[1]).hidden=false;});
+list.addEventListener('keydown',e=>{const t=e.target;if(/^iv_/.test(t.id)&&e.key==='Enter')$('#setb_'+t.id.slice(3)).click();
+ if(/^nm_/.test(t.id)){if(e.key==='Enter')toggleEdit(t.id.slice(3));else if(e.key==='Escape'){editId=null;drawReaders();}}});
+list.addEventListener('change',e=>{const m=/^fw_(.+)/.exec(e.target.id);if(m){const f=e.target.files[0],w=heapWarn(f?f.size:0),op=$('#op_'+m[1]);op.textContent=w||'';op.style.color=w?'var(--rd)':'';}});
 let dragKey=null,dragId=null;
-function boxDrag(e,id,k){dragKey=k;dragId=id;e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',k);}catch(_){}}
-function boxOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';e.currentTarget.classList.add('dragover');}
-function boxLeave(e){e.currentTarget.classList.remove('dragover');}
-function boxEnd(){dragKey=null;dragId=null;}
-function boxDrop(e,id,k){e.preventDefault();e.currentTarget.classList.remove('dragover');
- if(dragId!==id||dragKey===null||dragKey===k)return;     // only reorder within the same reader card
- const r=_rs.find(x=>x.id===id);if(!r)return;
- const ord=boxOrder(r),from=ord.findIndex(b=>b.key===dragKey),to=ord.findIndex(b=>b.key===k);
- if(from<0||to<0)return;
- const [m]=ord.splice(from,1);ord.splice(to,0,m);
- commitBox(r,ord);
-}
-function boxVis(id,k){const r=_rs.find(x=>x.id===id);if(!r)return;
- const ord=boxOrder(r),b=ord.find(x=>x.key===k);if(b)b.vis=!b.vis;commitBox(r,ord);}
-function boxReset(id){const r=_rs.find(x=>x.id===id);if(!r)return;r.boxcfg='';saveBox(id,'');redraw();}
-function commitBox(r,ord){const cfg=ord.map(b=>(b.vis?'':'-')+b.key).join(',');r.boxcfg=cfg;saveBox(r.id,cfg);redraw();}
-// Persist a layout change. Retries a few times over ~1.5s (rides out a brief blip) and, if it still can't
-// reach the gateway (e.g. mid-reboot), warns the user instead of failing silently — otherwise the change
-// only lives in the browser until the next poll reverts it, which looks like "my layout got lost".
-async function saveBox(id,cfg){
- for(let i=0;i<3;i++){
-  try{const r=await fetch('/api/boxcfg?id='+id+'&cfg='+encodeURIComponent(cfg),{method:'POST'});if(r.ok)return true;}catch(e){}
-  await new Promise(s=>setTimeout(s,500));
- }
- alert(L.boxsaveerr);return false;
-}
-// One unified per-card edit mode (card header ✎): the name field becomes editable AND the boxes get their
-// drag/hide handles. Entering focuses the name; leaving (or Enter) saves the name only if it actually changed.
-function toggleEdit(id){
- if(editId===id){saveNameIfChanged(id);editId=null;redraw();}       // leaving edit mode
- else{editId=id;redraw();const el=$('#nm_'+id);if(el){el.focus();el.select();}}   // entering -> jump into the name field
-}
-function saveNameIfChanged(id){
- const el=$('#nm_'+id);if(!el)return;
- const v=el.value.trim().slice(0,24),r=_rs.find(x=>x.id===id);
- if(r&&v!==(r.name||'')){r.name=v;fetch('/api/name?id='+id+'&name='+encodeURIComponent(v),{method:'POST'}).catch(()=>{});}
-}
-function card(r){
- const nm=r.name?esc(r.name):'';
- return `<div class="card${r.assigned?'':' pending'}">
-  <div class="hd">${editId===r.id
-   ?`<input class="nmi" id="nm_${r.id}" maxlength="24" value="${esc(r.name||'')}" placeholder="${r.id.toUpperCase()}" onkeydown="nmKey(event,'${r.id}')">`
-   :`<span class="id">${nm||r.id.toUpperCase()}</span>`}
-   <span class="tag ${r.type}">${r.type}</span>
-   ${r.assigned?'':`<span class="tag pend">${L.pending}</span>`}
-   <span class="meta">${nm?r.id.toUpperCase()+' · ':''}FW ${r.softver} · HW ${r.hardver}${r.legacy?' · legacy':''} · ${r.rssi} dBm · ${r.snr} dB${r.paired?' · 🔒':''}</span>
-   <button class="edb${editId===r.id?' act':''}" onclick="toggleEdit('${r.id}')" title="${editId===r.id?L.bdone:L.bedit}">✎</button>
-   <button class="del" ${editId===r.id?'disabled':''} onclick="delReader('${r.id}')" title="${L.del}">✕</button></div>
-  <div class="uuid">${r.uuid?('<b>UUID</b> '+r.uuid):L.uuidwait}</div>
-  ${r.bootloader?`<div class="boot">⚙ ${L.boot}</div>`:''}
-  <div class="mx">${mxHtml(r)}</div>
-  ${editId===r.id?`<div class="ebar"><button class="ren" onclick="boxReset('${r.id}')" title="${L.breset}">↺ ${L.breset}</button></div>`:''}
-  ${r.assigned?`<div class="ctrl ivrow"><div class="ivseg">${[['Live',1],['10s',10],['30s',30],['60s',60],['120s',120],['300s',300]].map(q=>`<button class="${r.interval==q[1]?'act':''}" onclick="setIvQ('${r.id}',${q[1]})">${q[0]}</button>`).join('')}<input type="number" id="iv_${r.id}" placeholder="${L.sec}" min="1" max="9999" value="${r.interval||''}" oninput="ivChg('${r.id}')" onkeydown="if(event.key==='Enter')setIv('${r.id}')"><button class="set" id="setb_${r.id}" style="display:none" onclick="setIv('${r.id}')">${L.setiv}</button></div>
-   <input type="file" id="fw_${r.id}" accept=".bin" onchange="fwCheck('${r.id}')" style="flex:1 1 200px;min-width:170px;padding:6px 8px;font-size:12px">
-   <button class="g" onclick="doOta('${r.id}',${r.softver||0})">${L.flash}</button>
-   <span class="meta" id="op_${r.id}"></span></div>`
-  :`<div class="ctrl"><button class="b" onclick="assignRd('${r.id}',1)">${L.addrd}</button>
-   <span class="meta">${L.pendhint}</span></div>`}
-  ${r.assigned&&!r.has_data&&!r.bootloader?`<div class="hint">⚠ ${L.irhint}</div>`:''}
- </div>`;
-}
-const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let _rs=[];
-// --- hide-unbound view state (persisted flag comes from /api/status; reveal/pairActive are live) ---
-let _hideUnbound=false,_revealTmp=false,_pairActive=false;
-// which reader cards to actually render: drop unbound ones when hiding is on — UNLESS temporarily revealed
-// or a pairing window is open (so you can always still bind a new reader)
-function visRs(list){return (_hideUnbound&&!_revealTmp&&!_pairActive)?list.filter(r=>r.assigned):list;}
-function redraw(){$('#list').innerHTML=visRs(_rs).map(card).join('');}
-async function setHideUnbound(){_revealTmp=false;const on=$('#hideunb_cb').checked;
- await fetch('/api/hideunbound?on='+(on?1:0),{method:'POST'}).catch(()=>{});tick();}
-function revealUnbound(){_revealTmp=true;tick();}       // temporary — reset on reload or when hiding is re-toggled
-function hideUnboundAgain(){_revealTmp=false;tick();}
-function nmKey(e,id){if(e.key==='Enter')toggleEdit(id);else if(e.key==='Escape'){editId=null;redraw();}}  // Enter=save+leave, Esc=discard+leave
-async function setIvQ(id,secs){await fetch('/api/interval?id='+id+'&seconds='+secs,{method:'POST'});tick();}   // one-tap preset (Live/10/30/60/120/300)
-function setIv(id){const v=$('#iv_'+id).value;if(v)setIvQ(id,v);}     // custom value from the input field
-function ivChg(id){$('#setb_'+id).style.display='';}                 // reveal the green "set" button once a custom value is typed
-async function assignRd(id,on){await fetch('/api/assign?id='+id+'&on='+on,{method:'POST'});tick();}
-async function pairAll(){await fetch('/api/pairall',{method:'POST'});tick();}
-async function delReader(id){if(!confirm(L.delq.replace('%i',id.toUpperCase())))return;
- await fetch('/api/delete?id='+id,{method:'POST'});tick();}
-let uploading=false;
-// the OTA buffer is ONE contiguous malloc() for the whole image (see gw_ota_begin) -- max_alloc_heap
-// (largest allocatable block, not just total free heap) is what decides whether that succeeds. MQTT's
-// TLS session alone can hold enough heap to push a ~45 KB reader image over the edge.
-function heapWarn(size){
- if(!lastStatus||lastStatus.max_alloc_heap==null)return null;
- return size>lastStatus.max_alloc_heap?L.heapwarn.replace('%s',fmtKB(size)).replace('%s',fmtKB(lastStatus.max_alloc_heap)):null;
-}
-function fwCheck(id){
- const f=$('#fw_'+id).files[0], w=$('#op_'+id); if(!w)return;
- const warn=f?heapWarn(f.size):null;
- w.textContent=warn||''; w.style.color=warn?'var(--red)':'';
-}
-async function doOta(id,cur){
- const f=$('#fw_'+id).files[0]; if(!f){$('#op_'+id).textContent=L.pick;return;}
- const hw=heapWarn(f.size); if(hw&&!confirm(hw))return;
- // version comes from the filename (…v55.bin); the reader needs it to decide whether to reflash.
- const vm=[...f.name.matchAll(/v(\d+)/g)].pop();   // last match: reader_v32x_v93 -> 93
- if(!vm){ alert(L.novers); $('#op_'+id).textContent=L.vmiss; return; }
- const ver=parseInt(vm[1])&255;
- const dl=lang=='de'?'Datei':'File';
- if(!confirm(L.otawarn+'\n\n'+L.vnote+'\n\nReader: '+id.toUpperCase()+'\n'+dl+': '+f.name+'\nVersion: v'+ver)) return;
- // the reader refuses an OTA to the version it is already running -> warn but let the user force it.
- if(cur&&ver===cur){ if(!confirm(L.samever.replace('%v',ver))) return; }
- const buf=await f.arrayBuffer(); const fd=new FormData(); fd.append('fw',new Blob([buf]),f.name);
- uploading=true; $('#op_'+id).textContent=L.uploading;
- try{ const r=await (await fetch('/api/ota?id='+id+'&size='+buf.byteLength+'&ver='+ver,{method:'POST',body:fd})).json();
-   $('#op_'+id).textContent=r.ok?L.armed:(r.error=='heap'?L.heapfail:'error'); }
- catch(e){ $('#op_'+id).textContent='error'; }
- uploading=false;
-}
-async function saveMqtt(){const b=new URLSearchParams();b.set('host',$('#c_host').value);b.set('port',$('#c_port').value);
- b.set('user',$('#c_user').value);b.set('topic',$('#c_topic').value);if($('#c_pass').value)b.set('pass',$('#c_pass').value);
- await fetch('/api/mqtt',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b});$('#c_pass').value='';tick();}
-async function rediscover(){const m=$('#disc_msg');m.textContent='…';
- try{const r=await(await fetch('/api/rediscover',{method:'POST'})).json();
-  m.textContent=r.ok?L.discok+' ('+r.count+')':L.discno;}catch(e){m.textContent=L.discno;}
- setTimeout(()=>{m.textContent=''},4000);tick();}
-applyLang();tick();setInterval(tick,2000);
+list.addEventListener('dragstart',e=>{const t=e.target.closest('.tile.edit');if(!t)return;dragKey=t.dataset.box;dragId=t.dataset.rid;e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',dragKey);}catch(_){}});
+list.addEventListener('dragover',e=>{const t=e.target.closest('.tile.edit');if(!t)return;e.preventDefault();t.classList.add('drag');});
+list.addEventListener('dragleave',e=>{const t=e.target.closest('.tile.edit');if(t)t.classList.remove('drag');});
+list.addEventListener('drop',e=>{const t=e.target.closest('.tile.edit');if(!t)return;e.preventDefault();t.classList.remove('drag');
+ if(dragId!==t.dataset.rid||!dragKey||dragKey===t.dataset.box)return;const r=_rs.find(x=>x.id===dragId),o=boxOrder(r),f=o.findIndex(b=>b.key===dragKey),to=o.findIndex(b=>b.key===t.dataset.box);
+ const[m]=o.splice(f,1);o.splice(to,0,m);commitBox(r,o);});
+/* ---------------- third-party devices ---------------- */
+let U=null,cat='all',sortBy=localStorage.getItem('unl_sort')||'rssi',openDev=null,openData=null,cfgDrawn=false;
+const DECT={plain:['plain','ok'],decrypted:['keyok','ok'],no_key:['nokey','warn'],wrong_key:['badkey','bad'],unsupported:['unsup','warn'],malformed:['unsup','warn']};
+function catOf(d){if(d.t==='wx')return'wx';if(d.t==='lw')return'lw';const y=d.type;if(y===0x1A)return'smoke';if(y===0x08||y===0x80)return'hca';
+ if([2,3,4,6,7,0x0a,0x0b,0x0c,0x0d,0x15,0x16,0x17,0x62,0x72].includes(y))return'meter';return'other';}
+function allDevs(){if(!U)return[];return[...U.wm.map(d=>({...d,t:'wm'})),...U.wx.map(d=>({...d,t:'wx'})),...U.lw.map(d=>({...d,t:'lw'}))];}
+function renderCats(){const c={all:0,meter:0,hca:0,smoke:0,wx:0,lw:0,other:0};allDevs().forEach(d=>{c.all++;c[catOf(d)]++;});
+ $('#cats').innerHTML=[['all',L.all],['meter',L.cmeter],['hca',L.chca],['smoke',L.csmoke],['wx',L.cwx],['lw',L.clw],['other',L.cother]].filter(([k])=>k==='all'||c[k])
+  .map(([k,t])=>`<button data-c="${k}" class="${cat===k?'on':''}">${t} <span class="mut">${c[k]}</span></button>`).join('');}
+$('#cats').onclick=e=>{const b=e.target.closest('[data-c]');if(!b)return;cat=b.dataset.c;renderCats();renderUnl();};
+['#q','#onlysel'].forEach(s=>$(s).addEventListener('input',()=>renderUnl()));
+$('#sort').onchange=e=>{sortBy=e.target.value;localStorage.setItem('unl_sort',sortBy);renderUnl();};
+function sig(r){const n=r>=-80?4:r>=-90?3:r>=-100?2:r>=-110?1:0;return`<span class="sig" title="${r} dBm">${[4,6,8,10].map((h,i)=>`<i class="${i<n?'on':''}" style="height:${h+2}px"></i>`).join('')}</span>`;}
+function title(d){if(d.name)return d.name;if(d.t==='wm')return d.tname+' '+d.id;if(d.t==='wx')return d.proto+(d.ch?' K'+d.ch:'');return d.join?'Join '+d.k.slice(1):'LoRaWAN '+d.k;}
+function kind(d){if(d.t==='wm')return d.tname+' · '+d.id+' · '+d.mode;if(d.t==='wx')return d.k+(d.exp?' · '+L.xp:'');return d.mtype+' · SF'+d.sf+' · '+d.freq+' MHz';}
+function sub(d){if(d.t==='wm')return(d.mfrn||d.mfr)+' · '+(d.name?d.tname+' · ':'')+d.id+' · '+d.mode;if(d.t==='wx')return d.k+(d.exp?' · '+L.xp:'');return d.mtype+' · SF'+d.sf+' · '+d.freq+' MHz';}
+function badge(d){if(d.t==='wm'){const x=DECT[d.dec];return x?`<span class="tag ${x[1]}">${L[x[0]]}</span>`:'';}if(d.t==='lw')return d.keys?`<span class="tag ${d.main=='Schlüssel falsch'?'bad':'ok'}">${L.keyS}</span>`:'';return d.exp?`<span class="tag warn">${L.xp}</span>`:'';}
+function renderUnl(){if(!U)return;renderCats();$('#n_funk')&&($('#n_funk').textContent=U.wm.length+U.wx.length+U.lw.length);
+ const q=$('#q').value.trim().toLowerCase(),only=$('#onlysel').checked;
+ let L2=allDevs().filter(d=>(cat==='all'||catOf(d)===cat)&&(!only||d.sel)&&(!q||[d.k,d.name,d.tname,d.mfr,d.mfrn,d.proto,d.main].join(' ').toLowerCase().includes(q)));
+ const cmp={rssi:(a,b)=>(b.rssi||-999)-(a.rssi||-999),age:(a,b)=>(a.age??1e9)-(b.age??1e9),name:(a,b)=>title(a).localeCompare(title(b))}[sortBy];
+ L2.sort((a,b)=>(b.sel-a.sel)||cmp(a,b));
+ $('#dl_h').innerHTML=`<th>HA</th><th>${L.hDev}</th><th class="hm">${L.hMfr}</th><th class="r">${L.hVal}</th><th class="hm">${L.hSig}</th><th>${L.hSeen}</th><th class="hm">${L.hStat}</th>`;
+ $('#devs').innerHTML=L2.map(d=>{const m=d.main||'',mut=!m||/^(verschlüsselt|FCnt|Join|Schlüssel)/.test(m);
+  return`<tr data-t="${d.t}" data-k="${d.k}"><td><input type="checkbox" data-sel="1" title="${L.tooHA}" ${d.sel?'checked':''}></td>
+  <td><div class="nm">${esc(title(d))}</div><div class="sub">${esc(kind(d))}</div></td><td class="hm">${esc(d.t==='wm'?(d.mfrn||d.mfr):d.t==='wx'?d.proto.split(' ')[0]:'LoRaWAN')}</td>
+  <td class="val${mut?' mut':''}">${esc(m||'–')}</td><td class="hm">${d.rssi} dBm</td><td>${age(d.age)}</td><td class="hm">${badge(d)}</td></tr>`;}).join('');
+ $('#devs_empty').hidden=U.wm.length+U.wx.length+U.lw.length>0;$('#devs_empty').textContent=L.nodev;}
+$('#devs').addEventListener('click',async e=>{const c=e.target.closest('tr[data-k]');if(!c)return;
+ if(e.target.dataset.sel!==undefined){{await post('/api/unl/dev',{t:c.dataset.t,k:c.dataset.k,sel:e.target.checked?1:0});loadUnl();}return;}
+ openDetail(c.dataset.t,c.dataset.k);});
+async function loadUnl(){try{U=await(await fetch('/api/unl')).json();renderUnl();renderEmpfang();if(openDev&&!paneBusy())openDetail(openDev.t,openDev.k,true);}catch(e){}}
+/* ---------------- detail pane ---------------- */
+const paneBusy=()=>$('#pane').contains(document.activeElement)&&/INPUT|SELECT/.test(document.activeElement.tagName);
+function closeDetail(){openDev=null;$('#ov').hidden=true;}
+$('#ov').addEventListener('click',e=>{if(e.target.id==='ov')closeDetail();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#ov').hidden)closeDetail();});
+const fmtHex=h=>h?h.replace(/(..)/g,'$1 ').trim():'';
+function fmtVal(v,u){if(typeof v==='number')return esc(nf(v))+(u?' <small>'+esc(u)+'</small>':'');if(typeof v==='boolean')return v?(lang=='de'?'ja':'yes'):(lang=='de'?'nein':'no');
+ if(typeof v==='string'&&/^\d{4}-\d\d-\d\d$/.test(v))return esc(new Date(v+'T00:00').toLocaleDateString(loc()));
+ if(typeof v==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(v))return esc(new Date(v).toLocaleString(loc(),{dateStyle:'medium',timeStyle:'short'}));return esc(v);}
+async function openDetail(t,k,refresh){openDev={t,k};let x;try{x=await(await fetch('/api/unl/dev?t='+t+'&k='+encodeURIComponent(k))).json();}catch(e){return;}
+ if(!openDev||openDev.k!==k)return;const d={...x.dev,t};openData=x;
+ let empty='';if(!x.vals.length){if(t==='wm')empty=x.cached===false?L.novalsCache:d.dec==='no_key'?L.novalsEnc:d.dec==='wrong_key'?L.novalsBad:(d.ci>=0xA0&&d.ci<=0xB7)?L.novalsMfr:L.novals;else if(t==='lw')empty=d.keys?L.novalsBad:L.nolw;else empty=L.novals;}
+ const main=x.vals.filter(v=>!v.d),diag=x.vals.filter(v=>v.d);
+ const tech=t==='wm'?[['Hersteller',(d.mfrn?d.mfrn+' ':'')+'('+d.mfr+')'],['ID',d.id],['Typ',d.tname+' (0x'+d.type.toString(16).padStart(2,'0')+')'],['Version',d.ver],['Funkmodus',d.mode],['CI','0x'+d.ci.toString(16)],
+   ['Verschlüsselung',d.sec?'AES Mode '+d.sec:'keine'],['Status',d.stxt+' (0x'+d.status.toString(16).padStart(2,'0')+')'],['Decoder',x.decoder||'OMS / DIF-VIF']]
+  :t==='wx'?[['Protokoll',d.proto],['ID',d.id],['Kanal',d.ch]]
+  :[['Typ',d.mtype],[d.join?'DevEUI':'DevAddr',d.k.replace(/^J/,'')],['Frame-Zähler',d.fcnt],['Port',d.fport??'–'],['Nutzdaten',d.plen+' Byte'],['SNR',d.snr+' dB'],['Kanal',d.freq+' MHz · SF'+d.sf]];
+ tech.push(['RSSI',d.rssi+' dBm'],['Zuletzt',age(d.age)],['Empfangen',d.count+'×']);
+ $('#pane').innerHTML=`<div class="bar" style="margin:0"><div style="flex:1;min-width:0"><h2>${esc(title(d))}</h2><div class="dim" style="font-size:12.5px">${esc(sub(d))}</div></div><button class="btn" id="pclose">${L.close}</button></div>
+ <div class="bar" style="margin:12px 0 0"><label class="ck"><input type="checkbox" id="psel" ${d.sel?'checked':''}>${L.tooHA}</label><span class="sp"></span>${badge(d)}</div>
+ <h3>${L.values}</h3>${main.length?`<table class="vt">${main.map(v=>`<tr><td>${esc(v.l)}</td><td class="v">${fmtVal(v.v,v.u)}</td></tr>`).join('')}</table>`:`<div class="note">${empty}</div>`}
+ <h3>${L.name}</h3><div class="frm" style="margin:0"><input id="pname" maxlength="24" value="${esc(d.name)}" placeholder="${esc(title({...d,name:''}))}"><button class="btn" id="pnsave">${L.save}</button></div>
+ ${t==='wm'?`<h3>${L.key}</h3><div class="frm" style="margin:0"><input id="pkey" class="mono" placeholder="${d.key?'••••••••••••••••••••••••••••••••':'00112233445566778899AABBCCDDEEFF'}" maxlength="47" autocomplete="off"><button class="btn pri" id="pkset">${L.keyset}</button>${d.key?`<button class="btn bad" id="pkdel">${L.keydel}</button>`:''}</div>`:''}
+ ${t==='lw'&&!d.join?`<h3>${L.lwkeys}</h3><div class="frm" style="margin:0"><input id="pnwk" class="mono" placeholder="NwkSKey" maxlength="47" autocomplete="off"><input id="papp" class="mono" placeholder="AppSKey" maxlength="47" autocomplete="off"><button class="btn pri" id="plset">${L.keyset}</button>${d.keys?`<button class="btn bad" id="pldel">${L.keydel}</button>`:''}</div>`:''}
+ <details><summary class="dim" style="cursor:pointer;margin-top:18px">${L.tech}${diag.length?' · '+diag.length:''}</summary><div class="kv" style="margin-top:10px">${tech.map(([a,b])=>`<span>${a}</span><span class="mono">${esc(b)}</span>`).join('')}</div>
+  ${diag.length?`<table class="vt" style="margin-top:10px">${diag.map(v=>`<tr class="dg"><td>${esc(v.l)}</td><td class="v">${fmtVal(v.v,v.u)}</td></tr>`).join('')}</table>`:''}</details>
+ ${x.frame||x.phy?`<details><summary class="dim" style="cursor:pointer;margin-top:12px">${L.raw}</summary><div class="hex" style="margin-top:8px">${fmtHex(x.frame||x.phy)}</div>${x.plain?`<div class="hex" style="margin-top:6px;color:var(--ac)">${fmtHex(x.plain)}</div>`:''}</details>`:''}
+ <div class="frm" style="margin-top:22px"><button class="btn bad" id="pforget">${L.forget}</button></div>`;
+ $('#ov').hidden=false;
+ const set=async b=>{const r=await post('/api/unl/dev',{t,k,...b});if(!r.ok){try{alert((await r.json()).err||'Fehler');}catch(e){alert('Fehler');}}loadUnl();};
+ $('#pclose').onclick=closeDetail;$('#psel').onchange=e=>set({sel:e.target.checked?1:0});
+ $('#pnsave').onclick=()=>set({name:$('#pname').value});
+ if($('#pkset'))$('#pkset').onclick=()=>{const v=$('#pkey').value.trim();if(!/^[0-9a-fA-F:\s-]{32,47}$/.test(v))return alert(L.key);set({key:v});};
+ if($('#pkdel'))$('#pkdel').onclick=()=>set({key:''});
+ if($('#plset'))$('#plset').onclick=()=>set({nwk:$('#pnwk').value.trim(),app:$('#papp').value.trim()});
+ if($('#pldel'))$('#pldel').onclick=()=>set({nwk:'',app:''});
+ $('#pforget').onclick=async()=>{if(!confirm(L.forgetq))return;await post('/api/unl/dev',{t,k,forget:1});closeDetail();loadUnl();};}
+/* ---------------- reception tab ---------------- */
+const LIS=[['OBI','#2f6db5'],['wM-Bus T1/C1','#4f9a6b'],['wM-Bus S1','#8a6fb0'],['Bresser','#b08a3e'],['LaCrosse','#5f9ea8'],['LoRaWAN','#a35d5d']];
+function renderEmpfang(){if(!U)return;const s=U.stats,t=Math.max(1,s.ms.reduce((a,b)=>a+b,0));
+ $('#abar').innerHTML=s.ms.map((v,i)=>`<i style="width:${(100*v/t).toFixed(2)}%;background:${LIS[i][1]}"></i>`).join('');
+ $('#leg').innerHTML=s.ms.map((v,i)=>`<span style="--c:${LIS[i][1]}">${LIS[i][0]} ${(100*v/t).toFixed(1)} %</span>`).join('');
+ const okSum=s.ok.reduce((a,b)=>a+b,0);
+ $('#stats').innerHTML=[[L.sOk,okSum+(s.ok.some(x=>x)?' ('+s.ok.map((v,i)=>v?LIS[i+1][0].replace('wM-Bus ','')+' '+v:'').filter(Boolean).join(', ')+')':'')],[L.sCrc,s.crc],[L.sObi,s.obi_frames],
+  [L.sOff,s.obi_last_off+' / '+s.obi_max_off+' ms'],[L.sSw,s.switches+(s.switch_err?' · '+s.switch_err+' '+L.sErr:'')]].concat(s.qdrop?[[L.sDrop,s.qdrop]]:[])
+  .map(([l,v])=>`<div class="st"><div class="l">${l}</div><div class="v">${v}</div></div>`).join('');
+ if(!cfgDrawn)drawCfg();}
+function drawCfg(){if(!U)return;cfgDrawn=true;const c=U.cfg;
+ const li=(i,k)=>`<label class="ck"><input type="checkbox" class="cl" data-i="${i}" ${c.listen>>i&1?'checked':''}><span>${L[k]}</span></label><div class="d">${L[k+'d']}</div>`;
+ const chs=['868,1','868,3','868,5','867,1','867,3','867,5','867,7','867,9'];
+ $('#opts').innerHTML=`<label class="ck"><input type="checkbox" id="c_obi" ${c.obi?'checked':''}><span>${L.obi}</span></label>`+li(0,'l0')+li(1,'l1')+li(2,'l2')+li(3,'l3')+li(4,'l4')+
+  `<div class="chgrid">${chs.map((f,i)=>`<label class="ck"><input type="checkbox" class="cch" data-i="${i}" ${c.lwch>>i&1?'checked':''}>${f}</label>`).join('')}</div>
+  <div class="chgrid">${[7,8,9,10,11,12].map((sf,i)=>`<label class="ck"><input type="checkbox" class="csf" data-i="${i}" ${c.lwsf>>i&1?'checked':''}>SF${sf}</label>`).join('')}<span class="mut">${L.sfhint}</span></div>`;
+ $('#c_win').value=c.win;$('#c_avh').value=c.avh;}
+const mask=s=>$$(s).reduce((m,e)=>m|(e.checked?1<<+e.dataset.i:0),0);
+$('#c_save').onclick=async()=>{try{const r=await(await post('/api/unl/cfg',{obi:$('#c_obi').checked?1:0,listen:mask('.cl'),lwch:mask('.cch')||1,lwsf:mask('.csf')||1,win:$('#c_win').value,avh:$('#c_avh').value})).json();
+ U.cfg=r.cfg;cfgDrawn=false;drawCfg();$('#c_msg').textContent=L.saved;setTimeout(()=>$('#c_msg').textContent='',3000);}catch(e){$('#c_msg').textContent='Fehler';}};
+$('#st_reset').onclick=async()=>{await post('/api/unl/stats/reset');loadUnl();};
+let logRows=[],logSince=0,logPaused=false,logNow=0;
+const LMODE={1:'T1',2:'C1a',3:'C1b',4:'S1'};
+function renderLog(){$('#logb').innerHTML=logRows.slice(-150).reverse().map(e=>`<tr><td class="dim">${age(Math.round((logNow-e.t)/1000))}</td><td>${LIS[e.l+1][0]}${e.l<2&&LMODE[e.m]?' <span class="mut">'+LMODE[e.m]+'</span>':e.l===4?' <span class="mut">SF'+e.m+'</span>':''}</td>
+ <td class="mono" style="color:${e.r?'var(--rd)':'var(--tx)'}">${esc(e.who)}</td><td>${e.rssi}</td><td>${e.len}</td><td class="hex2">${fmtHex(e.b)}${e.len>e.b.length/2?' …':''}</td></tr>`).join('');}
+async function pollLog(){if(logPaused||tab!=='empfang')return;try{const r=await(await fetch('/api/unl/log?since='+logSince)).json();logNow=r.now;
+ if(r.e.length)logRows=logRows.concat(r.e).slice(-300);logSince=r.seq;renderLog();}catch(e){}}
+$('#lpause').onclick=()=>{logPaused=!logPaused;$('#lpause').textContent=logPaused?L.resume:L.pause;};
+$('#lclear').onclick=()=>{logRows=[];renderLog();};
+/* ---------------- start ---------------- */
+applyLang();showTab(tab);tick();loadUnl();
+setInterval(tick,2000);setInterval(()=>{if(!document.hidden&&tab!=='strom')loadUnl();},4000);setInterval(pollLog,1500);
 </script></body></html>
