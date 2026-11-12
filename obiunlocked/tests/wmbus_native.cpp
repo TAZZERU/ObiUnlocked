@@ -61,6 +61,16 @@ int main(int argc, char **argv) {
     printf("\n");
     return 0;
   }
+  if (argc >= 3 && !strcmp(argv[1], "peek")) {   // header of a CRC-damaged telegram
+    std::vector<uint8_t> raw = unhex(argv[2]);
+    uint8_t h[10], mode = 0;
+    bool ok = wmb::peekHeader(raw.data(), raw.size(), argc >= 4, h, mode);
+    char m[4];
+    wmb::mfrCode((uint16_t)(h[2] | (h[3] << 8)), m);
+    if (ok) printf("ok=1 mfr=%s id=%02x%02x%02x%02x ver=%u type=%u mode=%s\n", m, h[7], h[6], h[5], h[4], h[8], h[9], wmb::modeName(mode));
+    else printf("ok=0\n");
+    return 0;
+  }
   if (argc >= 3 && (!strcmp(argv[1], "radio") || !strcmp(argv[1], "s1"))) {
     std::vector<uint8_t> raw = unhex(argv[2]);
     std::vector<uint8_t> key = argc >= 4 ? unhex(argv[3]) : std::vector<uint8_t>();

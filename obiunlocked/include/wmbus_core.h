@@ -46,6 +46,10 @@ enum RadioResult : int8_t {
 RadioResult fromRadio(const uint8_t *raw, size_t rawLen, Frame &f);
 // S1 (868.3 MHz, 32.768 kchip/s Manchester): raw = chips after the 0x7696 sync word.
 RadioResult fromRadioS1(const uint8_t *raw, size_t rawLen, Frame &f);
+// Identity of a telegram whose full CRC check failed: block 1 (L C M A, 10 bytes) of frame format A carries
+// its own CRC, so manufacturer / ID / version / type are still trustworthy when only later blocks were hit
+// by bit errors. Works for T1, C1 frame A and S1 (frame B has no separate first-block CRC).
+bool peekHeader(const uint8_t *raw, size_t rawLen, bool s1, uint8_t hdr[10], uint8_t &mode);
 // Manchester chips -> bytes (chip pair 10 = 1 / 01 = 0, or the inverse); stops at the first invalid pair.
 size_t decodeManchester(const uint8_t *in, size_t inLen, uint8_t *out, size_t outMax, bool invert);
 

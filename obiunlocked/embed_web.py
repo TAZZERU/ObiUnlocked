@@ -11,12 +11,14 @@ def generate(source, destination):
     pages = sorted(Path(source).glob('*.html'))
     if not pages:
         raise ValueError('No web pages found')
+    pages += sorted(Path(source).glob('*.css')) + sorted(Path(source).glob('*.js'))   # shared assets
     for page in pages:
         buffer = io.BytesIO()
         with gzip.GzipFile(fileobj=buffer, filename='', mode='wb', mtime=0) as stream:
             stream.write(page.read_bytes())
         data = buffer.getvalue()
-        symbol = page.stem.upper() + '_HTML_GZ'
+        kind = page.suffix[1:].upper()
+        symbol = page.stem.upper() + '_' + ('HTML' if kind == 'HTML' else kind) + '_GZ'
         lines.append(f'static const uint8_t {symbol}[] PROGMEM = {{')
         for offset in range(0, len(data), 16):
             lines.append('  ' + ','.join(f'0x{byte:02x}' for byte in data[offset:offset + 16]) + ',')
