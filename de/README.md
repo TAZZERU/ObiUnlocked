@@ -13,14 +13,14 @@ mit dem Reader spricht — damit dir die gekaufte Hardware wirklich gehört.
 
 > ➡️ **Einfachste Schritt‑für‑Schritt‑Anleitung: [../ANLEITUNG.md](../ANLEITUNG.md)** (1‑to‑Done).
 
-### ⚡ Eigene Open-Source-Firmware direkt auf das originale OBI Gateway flashen → **[Open ESP32-C3 Gateway-Firmware](../open_obi_energy_meter/)**
+### ⚡ Eigene Open-Source-Firmware direkt auf das originale OBI Gateway flashen → **[Open ESP32-C3 Gateway-Firmware](../obiunlocked/)**
 Eine komplette **Open-Source-ESP32-C3-Firmware**, die das Hersteller-Gateway **vollständig ersetzt**. Sie
 läuft **allgemein auf ESP32 + SX1262** (z. B. Heltec, LILYGO, Seeed XIAO) — **und speziell auch auf dem
 originalen OBI/heyOBI-Gateway**, wo sie **per OTA installiert** wird (kein UART/Löten, der Bootloader ist
 gesperrt). Sie koppelt die LoRa-Reader selbst, dekodiert die Energie auf dem Gerät und bietet ein
 **lokales Web-Dashboard + MQTT / MQTTS** mit Home-Assistant-Discovery — plus Reader-OTA und Self-Update.
 
-Schritt-für-Schritt vom Stock- zum eigenen Gateway: **[Open OBI Energy Meter](../open_obi_energy_meter/)**.
+Schritt-für-Schritt vom Stock- zum eigenen Gateway: **[Open OBI Energy Meter](../obiunlocked/)**.
 
 ## Das System auf einen Blick
 ```mermaid
@@ -48,7 +48,7 @@ Einige erklärungen im Video format gibt es hier:(Zur weiterleitung einfach aufs
 |---|---|---|
 | **Gateway auf eigenen MQTTS‑Server** | TEA‑Key holen → eigene CA+Certs+URL per BLE pushen → eigener Broker | [04 · Eigene Cloud](04-eigene-cloud.md) |
 | **Reader direkt per 868 MHz lesen** | Ohne Cloud: das LoRa‑Protokoll direkt sprechen | [05 · LoRa direkt](05-lora-direkt.md) |
-| **Bridge durch eigenen ESP32 ersetzen** ✅ | Vollständige Mini‑Gateway‑Firmware: Reader koppeln, Energie dekodieren, Web + MQTT, Intervall setzen, Reader per Funk flashen | [Open OBI Energy Meter](../open_obi_energy_meter/) |
+| **Bridge durch eigenen ESP32 ersetzen** ✅ | Vollständige Mini‑Gateway‑Firmware: Reader koppeln, Energie dekodieren, Web + MQTT, Intervall setzen, Reader per Funk flashen | [Open OBI Energy Meter](../obiunlocked/) |
 | **Reader an ein Gateway koppeln** ✅ | `SensorScan` (finden) → `SensorBind` (koppeln) → `Sensor` (Status) — an Hardware verifiziert | [07 · Reader koppeln](07-reader-koppeln.md) |
 | **Firmware verstehen/erweitern** | Protokolle, Frame‑Formate, Memory‑Maps, IDA‑fertige Images | [03 · Reversing](03-reverse-engineering.md) · [firmware/](../firmware/) |
 
@@ -71,7 +71,7 @@ Firmware nur über die eigene Cloud‑OTA (Bootloader per eFuse gesperrt).
 05-lora-direkt.md          Direkt per Funk mit dem Reader, ohne Cloud
 06-tools.md                Web-Tools (UART-Config, BLE-Gateway) + BLE-TEA-Codec
 07-reader-koppeln.md       Reader per BLE koppeln (SensorScan / SensorBind / Sensor) — verifiziert
-../open_obi_energy_meter/  Eigenständige ESP32+SX1262-Firmware, die die Bridge ERSETZT (Web + MQTT + Reader-OTA)
+../obiunlocked/  Eigenständige ESP32+SX1262-Firmware, die die Bridge ERSETZT (Web + MQTT + Reader-OTA)
 ../firmware/               Loader-Script + IDA-Notizen (keine Vendor-Binaries — eigenes Dump)
 ```
 

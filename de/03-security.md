@@ -26,7 +26,7 @@ Steuer‑Payloads sind also auf **jeder** Firmware faktisch öffentlich. Das sti
 > **Korrektur (durch den Bau der ESP32‑Gateway verifiziert).** Eine frühere Fassung dieser Notiz behauptete,
 > auch der *Energie‑Payload* bleibe auf `1.0.x`/`3x.x` bei 1‑Byte‑XOR — mit der Annahme, das ECDH‑Secret
 > werde „nie genutzt". Das Koppeln eines echten Readers mit unserer eigenen Gateway
-> ([../open_obi_energy_meter](../open_obi_energy_meter)) widerlegte das. Der alte Reader, den die Cloud als
+> ([../obiunlocked](../obiunlocked)) widerlegte das. Der alte Reader, den die Cloud als
 > Firmware **`1.0.1`** meldet, meldet auf dem LoRa‑Link in Wahrheit **softver 32 („v32")** und nutzt die
 > **gleiche ECDH → TEA‑ECB**‑Krypto wie 1.2.x. Reversed aus dem ACK‑Handler `sub_B7A0` des v32‑Readers:
 > dieser Reader **verlangt** sein Energie‑ACK (cmd 24→56 / 25→57) **TEA‑verschlüsselt** mit dem ECDH‑Key —

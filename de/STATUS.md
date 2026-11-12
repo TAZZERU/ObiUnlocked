@@ -54,7 +54,7 @@ koppeln (eingebaut in `ble_provision.py --pair-sensor`) — siehe [07-reader-kop
 > „Alle 3 min binden"** im Web‑Dashboard), ohne BLE und ohne Cloud. Die exakten SX1262‑RF‑Parameter sind
 > ebenfalls bekannt — reversed aus Reader `v1.2.1` und im offenen Gateway aktiv: **869,5 MHz · LoRa ·
 > BW 500 kHz · SF7 · CR 4/5 · Präambel 12 · Sync 0x1424 · +22 dBm · TCXO 1,8 V** (siehe
-> [platformio.ini](../open_obi_energy_meter/platformio.ini) / [03-lora-protokoll.md](03-lora-protokoll.md)).
+> [platformio.ini](../obiunlocked/platformio.ini) / [03-lora-protokoll.md](03-lora-protokoll.md)).
 
 Beiträge sind weiter willkommen, um das Reverse Engineering des Hersteller‑Systems zu erweitern. Gute
 Einstiegspunkte: [eigene Cloud + Broker‑Log](04-eigene-cloud.md), [MQTT‑Topics](03-firmware-layout.md),

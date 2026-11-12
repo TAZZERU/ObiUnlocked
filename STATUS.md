@@ -9,7 +9,7 @@ The project is in a **healthy, working state**. The two headline goals are done 
   **history** (daily kWh + cost), **reader-OTA over LoRa**, gateway **self-OTA** (web upload / GitHub
   release), a web **factory reset**, and **RSSI + SNR** per reader. Builds cleanly for **6 board targets**
   (stock OBI C3, Heltec Vision Master E290, LILYGO T-Beam, Seeed XIAO S3, generic ESP32 / ESP32-S3).
-  → [`open_obi_energy_meter/`](open_obi_energy_meter/).
+  → [`obiunlocked/`](obiunlocked/).
 - **✅ Own-cloud path for the *stock* bridge is complete** — TEA key → PKI → MQTTS broker → BLE
   provisioning → live telemetry, and the **custom-firmware OTA** that installs the firmware above. All
   verified on hardware.
@@ -76,7 +76,7 @@ active during a setup window. Re-open that window anytime by **holding the gatew
 > for 3 min"** in the web dashboard), no BLE and no cloud involved. The exact SX1262 RF params are known too
 > — reversed from reader `v1.2.1` and running in the open gateway: **869.5 MHz · LoRa · BW 500 kHz · SF7 ·
 > CR 4/5 · preamble 12 · sync 0x1424 · +22 dBm · TCXO 1.8 V** (see
-> [platformio.ini](open_obi_energy_meter/platformio.ini) / [lora-protocol.md](03-reverse-engineering/lora-protocol.md)).
+> [platformio.ini](obiunlocked/platformio.ini) / [lora-protocol.md](03-reverse-engineering/lora-protocol.md)).
 
 Contributions are still welcome for extending the vendor-system RE further — starting points:
 [own cloud + broker log](04-connect-your-own-cloud/README.md),

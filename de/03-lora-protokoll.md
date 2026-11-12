@@ -115,7 +115,7 @@ Energiedaten** (kein Exchange → Daten verworfen), der Handshake ist also immer
 
 Das Shared‑Secret **ist der LoRa‑Key** — und (eine frühere Annahme hier korrigierend) das gilt **auch für
 die alten v32‑Reader**, nicht nur für 1.2.x. Verifiziert durch den Bau der ESP32‑Gateway
-([../open_obi_energy_meter](../open_obi_energy_meter)): der alte Reader, dessen Cloud‑Firmware‑String
+([../obiunlocked](../obiunlocked)): der alte Reader, dessen Cloud‑Firmware‑String
 `1.0.1` lautet, meldet auf dem Link **softver 32 („v32")** und **verlangt** sein Energie‑ACK (cmd 24→56 /
 25→57) **TEA‑verschlüsselt** mit dem ECDH‑Key (reversed aus seinem ACK‑Handler `sub_B7A0`); sein Energie‑
 Uplink wird über denselben TEA‑Pfad dekodiert (`tea/legacy`).

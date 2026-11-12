@@ -22,7 +22,7 @@ Zyklen. Sie schaltet den Zähler-UART ein, nimmt **ein** Telegramm und schaltet 
 wartet sie in Zustand `0x114`, bis `(jetzt_s - start_s) > period` gilt. `sub_C074` prüft das in ganzen
 Sekunden. `period` ist das **Upload-Intervall** (`S[8]`, der Wert aus dem Energie-ACK des Gateways). Das
 Preset „Live" des Gateways kommt als Intervall 2 an (`2 × b[1]`, siehe den Legacy-ACK in
-`open_obi_energy_meter/src/main.cpp`). Allein die Pause dauert also 3 s, danach wartet der Reader noch
+`obiunlocked/src/main.cpp`). Allein die Pause dauert also 3 s, danach wartet der Reader noch
 aufs nächste Telegramm. Ergebnis: 3–4 s pro Wert, obwohl der Reader am USB nie schläft und der Zähler
 jede Sekunde sendet.
 

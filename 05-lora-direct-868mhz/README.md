@@ -9,7 +9,7 @@ SDR).
 
 > 💡 **Want the finished firmware, not just the protocol?** A complete, ready-to-flash **mini-gateway**
 > (pairing + ECDH + energy decode, web dashboard, MQTT, set-interval, reader firmware OTA) lives in
-> **[Open OBI Energy Meter](../open_obi_energy_meter/)**. This page explains the protocol *behind* it.
+> **[Open OBI Energy Meter](../obiunlocked/)**. This page explains the protocol *behind* it.
 
 ## What you need
 - An SX126x radio (e.g. a cheap SX1262 dev board). The reader's LoRa PHY is now **fully reversed** from

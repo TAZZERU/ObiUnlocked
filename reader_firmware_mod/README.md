@@ -501,7 +501,7 @@ bytes differ):
 4. **Gateway-side dual-SF handling**: the reader's bootloader only ever speaks SF7 (it's never been patched —
    only the app firmware is modified, see the constraint at the top of this doc), so an SF9-configured
    gateway must still drop to SF7 for the duration of a reader-OTA push, then return to SF9 afterward. See
-   `g_liveSF`/`applyLiveSF()`/`gw_ota_arm()`/`OTA_SF9_GRACE_MS` in `open_obi_energy_meter/src/main.cpp`. The
+   `g_liveSF`/`applyLiveSF()`/`gw_ota_arm()`/`OTA_SF9_GRACE_MS` in `obiunlocked/src/main.cpp`. The
    Settings toggle itself (`/api/lora/sf`) only persists the *desired* boot SF to NVS — applying it is always
    a reboot, deliberately never a live hot-swap, since both sides must already agree before either side
    applies it.
