@@ -1,18 +1,18 @@
 <!doctype html><html><head><meta charset=utf-8><link rel=icon href=/favicon.svg>
 <meta name=viewport content="width=device-width,initial-scale=1">
-<title>OBI · History</title>
-<style>
-:root{--bg:#0a0e14;--panel:#141a23;--panel2:#1b2430;--line:#232e3c;--txt:#eaf0f7;--dim:#7d8da0;--accent:#31d07a;--accent2:#12a35a;--amber:#e3b341;--red:#f0616d;--blue:#5aa9ff;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:12px 18px;background:#0c1219;border-bottom:1px solid var(--line)}
-header b{font-size:15px;white-space:nowrap}
+<title>ObiUnlocked — Verlauf</title>
+<link rel=stylesheet href=/app.css><style>
+
+
+
+.pagebar{z-index:5;display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--p1);border-bottom:1px solid var(--line)}
+.pagebar b{font-size:15px;white-space:nowrap}
 .sp{flex:1}
-select,button{font-size:14px;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:9px;padding:8px 11px}
+select,button{font-size:14px;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:8px 11px}
 button{cursor:pointer}
-header a{color:var(--accent);text-decoration:none;font-size:13px;white-space:nowrap}
+.pagebar a{color:var(--accent);text-decoration:none;font-size:13px;white-space:nowrap}
 .wrap{max-width:920px;margin:0 auto;padding:16px 18px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:16px}
 .card h2{margin:0 0 3px;font-size:15px}
 .cap{color:var(--dim);font-size:12px;margin:0 0 12px}
 .pricebox{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--dim);white-space:nowrap}
@@ -20,7 +20,7 @@ header a{color:var(--accent);text-decoration:none;font-size:13px;white-space:now
 #price,#eprice{width:76px;font-size:16px;text-align:right}
 #psaved,#esaved{color:var(--accent);font-size:12px}
 .dllabel{color:var(--dim);font-size:12px;white-space:nowrap}
-.langtog{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.langtog{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .langtog button{border:0;border-radius:0;padding:8px 10px;font-size:12px;font-weight:600;background:var(--panel2);color:var(--dim)}
 .langtog button.on{background:var(--accent2);color:#fff}
 #expTog{font-size:12px;font-weight:600;color:var(--dim)}
@@ -30,7 +30,7 @@ header a{color:var(--accent);text-decoration:none;font-size:13px;white-space:now
 .legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:9px;font-size:12px;color:var(--dim)}
 .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
 .kpis{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
-.kpi{flex:1 1 130px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+.kpi{flex:1 1 130px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:11px 13px}
 .kpi .v{font-size:21px;font-weight:600;font-family:var(--mono)}
 .kpi .l{font-size:11px;color:var(--dim);margin-top:2px}
 .twrap{overflow-x:auto}
@@ -41,39 +41,42 @@ th{color:var(--dim);font-weight:600;font-size:10.5px;text-transform:uppercase;le
 td.mono{font-family:var(--mono)}
 .pos{color:var(--accent)}.neg{color:var(--blue)}.na{color:var(--dim)}
 .empty{color:var(--dim);padding:26px 6px;text-align:center}
-.warn{background:#2a1e12;border:1px solid #4a3418;color:var(--amber);border-radius:11px;padding:10px 13px;font-size:12.5px;margin-bottom:16px}
+.warn{background:var(--p2);border:1px solid var(--ln);color:var(--amber);border-radius:6px;padding:10px 13px;font-size:12.5px;margin-bottom:16px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
 .msg{font-size:12.5px;color:var(--dim)}
 label{display:block;font-size:12px;color:var(--dim);margin:10px 0 4px}
-input[type=number]{font-size:14px;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:9px;padding:8px 11px;width:100%}
+input[type=number]{font-size:14px;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:8px 11px;width:100%}
 @media (max-width:760px){
- header{position:static;flex-wrap:wrap;gap:9px;padding:11px 13px}
+ .pagebar{position:static;flex-wrap:wrap;gap:9px;padding:11px 13px}
  .sp{display:none}
- header a{margin-left:auto}
+ .pagebar a{margin-left:auto}
  #rsel{flex:1 1 100%}
  .wrap{padding:13px 12px}
- .card{padding:13px 12px;border-radius:13px}
+ .card{padding:13px 12px;border-radius:6px}
  .kpi{flex:1 1 calc(50% - 5px)}
  .kpi .v{font-size:18px}
 }
-</style></head><body>
-<header><b>📈 OBI · History</b>
+
+.pagebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;background:var(--p1);border-bottom:1px solid var(--ln);font-size:13px}
+.pagebar>b{font-size:15px;font-weight:600}
+</style></head><body data-page="history"><script src=/app.js></script>
+<div class=pagebar><b>Verlauf</b>
 <select id=rsel><option>…</option></select>
-<button id=rf>↻</button>
-<span id=rangebox class=pricebox>⏱<select id=rrange><option value=1>1 h</option><option value=6>6 h</option><option value=24>24 h</option></select></span>
+<button id=rf>Neu laden</button>
+<span id=rangebox class=pricebox><select id=rrange><option value=1>1 h</option><option value=6>6 h</option><option value=24>24 h</option></select></span>
 <span id=dllabel class=dllabel></span>
-<button id=dldaily>⬇ 📅</button>
-<button id=dlraw>⬇ raw</button>
-<button id=clr>🗑</button>
-<span class=langtog><button data-l=de>DE</button><button data-l=en>EN</button></span>
+<button id=dldaily>CSV Tage</button>
+<button id=dlraw>CSV Rohdaten</button>
+<button id=clr>Verlauf löschen</button>
+<span class=langtog hidden><button data-l=de>DE</button><button data-l=en>EN</button></span>
 <span class=sp></span>
-<span id=pbox class=pricebox>💶<input id=price type=number step=1 min=0><small>ct/kWh</small><span id=psaved></span></span>
-<span id=ebox class=pricebox>☀️<input id=eprice type=number step=1 min=0><small>ct/kWh</small><span id=esaved></span></span>
+<span id=pbox class=pricebox>Bezug <input id=price type=number step=1 min=0><small>ct/kWh</small><span id=psaved></span></span>
+<span id=ebox class=pricebox>Einspeisung <input id=eprice type=number step=1 min=0><small>ct/kWh</small><span id=esaved></span></span>
 <button id=expTog></button>
 <span id=fsstat class=dllabel></span>
-<a href="/">← dashboard</a>
-</header>
+
+</div>
 <div class=wrap id=main><div class=empty>lädt…</div></div>
 <script>
 const $=id=>document.getElementById(id);
@@ -86,7 +89,7 @@ let readers=[],cur=null;
 // /api/history call either way; this only limits what's rendered. Persisted per-browser.
 let rawHours=localStorage.getItem('obiRawHours')||'1';
 const C={imp:'#31d07a',exp:'#5aa9ff',day:'#e3b341',pow:'#f0616d',calc:'#3ddbd9',month:'#b48cff',year:'#e08a4f'};
-let lang=localStorage.getItem('obilang');if(lang!=='en'&&lang!=='de')lang=(navigator.language||'de').slice(0,2)==='de'?'de':'en';
+let lang=localStorage.getItem('lang');if(lang!=='en'&&lang!=='de')lang=(navigator.language||'de').slice(0,2)==='de'?'de':'en';
 // number format for every kWh/W/€ value: independent of `lang` -- 0=auto (follow lang, historical
 // behavior), 1=force EU (1.234,56), 2=force US (1,234.56). Set from /api/status's num_fmt in boot() below
 // (a global gateway setting from the Settings page, not a per-page localStorage choice).
@@ -97,7 +100,7 @@ const T={
   noReaders:'Noch keine Reader bekannt.<br>Sobald ein Zähler empfangen wird, erscheint hier seine Historie.',
   offlineTag:'nicht in Reichweite',
   noHist:r=>'Für <b>'+r+'</b> wurde noch keine Historie aufgezeichnet.<br>Die Werte werden fortlaufend gespeichert — schau in ein paar Minuten wieder vorbei.',
-  ntp:'⏱ Uhrzeit noch nicht per NTP synchronisiert — Tagesverbrauch wird erst nach dem Zeitabgleich korrekt zugeordnet.',
+  ntp:'Uhrzeit noch nicht per NTP synchronisiert — Tagesverbrauch wird erst nach dem Zeitabgleich korrekt zugeordnet.',
   kImp:'Import · Bezug gesamt (kWh)',kExp:'Export · Einspeisung gesamt (kWh)',kToday:'Verbrauch heute – bisher (kWh)',
   kCost:p=>'Kosten heute ('+p+' ct/kWh)',kTodayExp:'Einspeisung heute – bisher (kWh)',
   kEarn:p=>'Erlös heute ('+p+' ct/kWh)',
@@ -128,14 +131,14 @@ const T={
   thTime:'Zeit',thPow:'Leistung W',thPowCalc:'Ø Leistung W (berechnet)',thImpK:'Import kWh',thDelta:'Δ Import kWh',thExpK:'Export kWh',thDeltaExp:'Δ Export kWh',
   fewPts:'zu wenige Messpunkte für einen Verlauf',noDay:'noch keine Tageswerte — bitte etwas Zeit sammeln',
   clearC:r=>'Gespeicherte Historie für '+r+' löschen?',
-  expTogOn:'📤 Export sichtbar',expTogOff:'📤 Export ausgeblendet',
+  expTogOn:'Export sichtbar',expTogOff:'Export ausgeblendet',
   expTogT:'Export-/Einspeisungsansichten für diesen Reader ein-/ausblenden — nur die Anzeige auf diesem Gerät, ändert nichts an der Erfassung oder anderen Anzeigen (z. B. MQTT).'},
  en:{reload:'reload',dlLabel:'Export:',dlRawT:'Download raw samples as CSV',dlDailyT:'Download daily values as CSV',clearT:"clear this reader's history",fsFreeT:'Free space for all readers\' history data (see /debug for details)',fsRaw:'raw data',fsDaily:'daily values',priceT:'Electricity price – applies only to the currently selected reader',priceTexp:'Feed-in tariff – applies only to the currently selected reader',
   loading:'loading…',loadErr:'Failed to load.',
   noReaders:'No readers known yet.<br>As soon as a meter is received, its history appears here.',
   offlineTag:'out of range',
   noHist:r=>'No history recorded for <b>'+r+'</b> yet.<br>Values are stored continuously — check back in a few minutes.',
-  ntp:'⏱ Clock not yet synced via NTP — daily consumption is only attributed correctly after the time sync.',
+  ntp:'Clock not yet synced via NTP — daily consumption is only attributed correctly after the time sync.',
   kImp:'Import · consumed total (kWh)',kExp:'Export · fed-in total (kWh)',kToday:'Consumption today – so far (kWh)',
   kCost:p=>'Cost today ('+p+' ct/kWh)',kTodayExp:'Feed-in today – so far (kWh)',
   kEarn:p=>'Earnings today ('+p+' ct/kWh)',
@@ -166,7 +169,7 @@ const T={
   thTime:'Time',thPow:'Power W',thPowCalc:'Avg power W (calc)',thImpK:'Import kWh',thDelta:'Δ import kWh',thExpK:'Export kWh',thDeltaExp:'Δ export kWh',
   fewPts:'too few samples for a trend',noDay:'no daily values yet — please let it collect data',
   clearC:r=>'Delete stored history for '+r+'?',
-  expTogOn:'📤 Export shown',expTogOff:'📤 Export hidden',
+  expTogOn:'Export shown',expTogOff:'Export hidden',
   expTogT:"Show/hide export & feed-in views for this reader — only changes this device's display, not data collection or other views (e.g. MQTT)."}
 };
 const t=k=>T[lang][k];
@@ -183,7 +186,7 @@ function applyLang(){document.documentElement.lang=lang;
  $('rangebox').title=t('rangeTip');$('expTog').title=t('expTogT');
  document.querySelectorAll('.langtog button').forEach(b=>b.classList.toggle('on',b.dataset.l===lang));
  updateExpTog();}
-document.querySelectorAll('.langtog button').forEach(b=>b.onclick=()=>{lang=b.dataset.l;localStorage.setItem('obilang',lang);applyLang();if(cur)load();});
+document.querySelectorAll('.langtog button').forEach(b=>b.onclick=()=>{lang=b.dataset.l;localStorage.setItem('lang',lang);applyLang();if(cur)load();});
 // Purely a per-browser display preference for readers without feed-in (e.g. no PV) -- localStorage only, keyed
 // per reader so it travels with reader selection. Never touches the gateway: doesn't call any API, doesn't
 // affect data collection, MQTT, or any other page -- it only hides Export/feed-in KPIs, charts and table
@@ -263,7 +266,7 @@ async function boot(){
  $('price').onchange=savePrice;$('eprice').onchange=saveEprice;
  try{let s=await (await fetch('/api/status')).json();numFmt=s.num_fmt||0;const hf=s.hist_fs;
   if(hf&&hf.ok){const kb=n=>(n/1024).toFixed(0)+' KB';
-   $('fsstat').textContent='💾 '+t('fsRaw')+' '+kb(hf.total-hf.used)+'/'+kb(hf.total)+(hf.backend==='ota'?' (OTA)':'')+
+   $('fsstat').textContent=''+t('fsRaw')+' '+kb(hf.total-hf.used)+'/'+kb(hf.total)+(hf.backend==='ota'?' (OTA)':'')+
     ' · '+t('fsDaily')+' '+kb(hf.daily_total-hf.daily_used)+'/'+kb(hf.daily_total);
    $('fsstat').title=t('fsFreeT');}
  }catch(e){}
@@ -285,12 +288,12 @@ async function boot(){
 async function savePrice(){if(!cur)return;let v=parseFloat($('price').value);if(isNaN(v)||v<0)return;
  $('psaved').textContent='…';
  try{await fetch('/api/reader/price?id='+cur+'&cent='+v,{method:'POST'});}catch(e){}
- $('psaved').textContent='✓';setTimeout(()=>{$('psaved').textContent='';},1500);
+ $('psaved').textContent='';setTimeout(()=>{$('psaved').textContent='';},1500);
  load();}                                    // refresh the cost columns for the current reader
 async function saveEprice(){if(!cur)return;let v=parseFloat($('eprice').value);if(isNaN(v)||v<0)return;
  $('esaved').textContent='…';
  try{await fetch('/api/reader/price?id='+cur+'&ecent='+v,{method:'POST'});}catch(e){}
- $('esaved').textContent='✓';setTimeout(()=>{$('esaved').textContent='';},1500);
+ $('esaved').textContent='';setTimeout(()=>{$('esaved').textContent='';},1500);
  load();}                                    // refresh the earnings columns for the current reader
 // mode 0 = off, 1 = day/night (existing 2-zone fields), 2 = §14a HT/ST/NT (new 3-zone fields) -- see
 // tariffMode in reader.h/gw_set_reader_price(). Only one scheme's fields are ever shown/editable at once
@@ -321,7 +324,7 @@ async function saveReaderPrice(){
  $('rpricemsg').textContent='…';
  try{await fetch('/api/reader/price',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b});}catch(e){}
  try{let d=await(await fetch('/api/readers')).json();readers=Array.isArray(d)?d:(d.readers||[]);}catch(e){}
- $('rpricemsg').textContent='✓';setTimeout(()=>{$('rpricemsg').textContent='';},1500);
+ $('rpricemsg').textContent='';setTimeout(()=>{$('rpricemsg').textContent='';},1500);
  load();
 }
 sel.onchange=()=>{cur=sel.value;localStorage.setItem('obihist',cur);load();};
@@ -528,7 +531,7 @@ async function load(silent){
   const fmtD=d=>d==null?'<span class=na>—</span>':(d>0?'<span class=pos>+'+nf(d,2)+'</span>':(d<0?'<span class=neg>'+nf(d,2)+'</span>':'<span class=na>0</span>'));
   const fmtW=w=>w==null?'<span class=na>—</span>':(w<0?'<span class=neg>'+nf(w,0)+'</span>':nf(w,0));
   let all=S.map((s,i)=>({s,di:i>0?(s[1]-S[i-1][1])/1000:null,de:i>0?(s[2]-S[i-1][2])/1000:null,cw:calcArr[i]}));
-  let shown=all.filter(o=>o.s[0]>=rCutoff);   // same shared window as the charts above (header ⏱ select)
+  let shown=all.filter(o=>o.s[0]>=rCutoff);   // same shared window as the charts above (header select)
   let rows=shown.reverse().map(o=>{
    let s=o.s,pw=s[3]==null?'<span class=na>—</span>':nf(s[3],0);
    return `<tr><td>${dmy(s[0])} ${hm(s[0])}</td><td class="mono">${pw}</td><td class="mono">${fmtW(o.cw)}</td><td class="mono">${nf(s[1]/1000,2)}</td><td class="mono">${fmtD(o.di)}</td>`+
