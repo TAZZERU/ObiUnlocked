@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include "lorawan_core.h"
+#include "web_assets.h"   // only APP_CSS_GZ / APP_JS_GZ are used here; unused blobs are dropped by the linker
 #include "web_gzip.h"
 #include "wmbus_core.h"
 #include "wx_core.h"
@@ -75,6 +76,7 @@ struct DevBase {
   int8_t avail = -1;               // last published availability; -2 = remove from HA in the next MQTT pass
   int16_t rssi = 0;
   uint32_t lastMs = 0, count = 0, seq = 0, pubSeq = 0, discHash = 0;
+  uint32_t seenMs = 0;             // any reception, also a CRC-damaged one (list order / eviction)
   char name[UNL_NAME_MAX] = {0};
   char main[MAIN_LEN] = {0};       // headline value for the device list ("104.505 m³", "21.5 °C · 45 %")
 };
@@ -83,6 +85,7 @@ struct WmDev : DevBase {
   uint8_t ver = 0, type = 0, mode = 0, ci = 0, secMode = 0, status = 0, cache = 0xFF;
   int8_t dec = 0;
   bool keySet = false; uint8_t key[16] = {0};
+  uint16_t errCnt = 0; int16_t errRssi = 0; uint32_t errMs = 0;   // telegrams with a good header but bad body
 };
 struct WxDev : DevBase { uint8_t proto = 0; uint32_t id = 0; wx::Reading r; };
 struct LwDev : DevBase {
@@ -476,7 +479,7 @@ static D *alloc(D (&tab)[N]) {   // free slot, else the longest-unheard device n
   for (auto &d : tab) if (!d.used) { slot = &d; break; }
   if (!slot)
     for (auto &d : tab)
-      if (!d.selected && !d.name[0] && (!slot || (int32_t)(d.lastMs - slot->lastMs) < 0)) slot = &d;
+      if (!d.selected && !d.name[0] && (!slot || (int32_t)(d.seenMs - slot->seenMs) < 0)) slot = &d;
   if (slot) { *slot = D(); slot->used = true; }
   return slot;
 }
@@ -505,7 +508,26 @@ static void processWmbus(const RxItem &it) {
   static wmb::Frame f;
   int rr = it.listener == UL_WMB_S1 ? wmb::fromRadioS1(it.data, it.len, f) : wmb::fromRadio(it.data, it.len, f);
   if (rr != wmb::RR_OK) {
-    if (rr == wmb::RR_BAD_CRC) { g_st.crc++; logAdd(it.listener, f.mode, (int8_t)rr, it.rssi, "CRC-Fehler", it.data, it.len); }
+    if (rr != wmb::RR_BAD_CRC) return;
+    g_st.crc++;
+    // weak reception: the first block (manufacturer / ID / type) has its own CRC -- list the device anyway
+    uint8_t hb[10], mode = 0;
+    if (!wmb::peekHeader(it.data, it.len, it.listener == UL_WMB_S1, hb, mode)) {
+      logAdd(it.listener, f.mode, (int8_t)rr, it.rssi, "CRC-Fehler", it.data, it.len);
+      return;
+    }
+    uint16_t mfr = (uint16_t)(hb[2] | (hb[3] << 8));
+    uint32_t id = (uint32_t)hb[4] | ((uint32_t)hb[5] << 8) | ((uint32_t)hb[6] << 16) | ((uint32_t)hb[7] << 24);
+    char key[20];
+    wmKey(mfr, id, key);
+    strlcat(key, " CRC", sizeof key);
+    logAdd(it.listener, mode, (int8_t)rr, it.rssi, key, it.data, it.len);
+    WmDev *d = nullptr;
+    for (auto &x : g_wm) if (x.used && x.mfr == mfr && x.id == id) { d = &x; break; }
+    if (!d && (d = alloc(g_wm))) { d->mfr = mfr; d->id = id; }
+    if (!d) return;
+    if (!d->count) { d->ver = hb[8]; d->type = hb[9]; d->mode = mode; strlcpy(d->main, "Empfang zu schwach", sizeof d->main); }
+    d->errCnt++; d->errRssi = it.rssi; d->errMs = it.ms; d->seenMs = it.ms;
     return;
   }
   wmb::Header h;
@@ -519,7 +541,7 @@ static void processWmbus(const RxItem &it) {
   if (!d && (d = alloc(g_wm))) { d->mfr = h.meterMfr(); d->id = h.meterId(); }
   if (!d) return;
   d->ver = h.meterVer(); d->type = h.meterType(); d->mode = f.mode; d->ci = h.ci; d->secMode = h.secMode;
-  d->status = h.status; d->rssi = it.rssi; d->lastMs = it.ms; d->count++; d->seq++;
+  d->status = h.status; d->rssi = it.rssi; d->lastMs = it.ms; d->seenMs = it.ms; d->count++; d->seq++;
   d->cache = cacheFrame(*d, f);
   MainPick m{ "", 99 };
   int dr = wmValues(*d, pickMain, &m);
@@ -540,7 +562,7 @@ static void processWeather(const RxItem &it) {
   if (d) wxKey(*d, key);
   logAdd(it.listener, r.proto, 0, it.rssi, key, it.data, it.len);
   if (!d) return;
-  d->r = r; d->rssi = it.rssi; d->lastMs = it.ms; d->count++; d->seq++;
+  d->r = r; d->rssi = it.rssi; d->lastMs = it.ms; d->seenMs = it.ms; d->count++; d->seq++;
   MainPick m{ "", 99 };
   wxValues(*d, pickMain, &m);
   setMain(*d, m);
@@ -563,7 +585,7 @@ static void processLorawan(const RxItem &it) {
   d->rssi = it.rssi; d->snrQ4 = it.snrQ4; d->sf = it.sf; d->freqKHz = it.freqKHz;
   d->phyLen = (uint8_t)(it.len > LW_PHY ? 0 : it.len);
   if (d->phyLen) memcpy(d->phy, it.data, d->phyLen);
-  d->lastMs = it.ms; d->count++; d->seq++;
+  d->lastMs = it.ms; d->seenMs = it.ms; d->count++; d->seq++;
   MainPick m{ "", 99 };
   int n = lwValues(*d, pickMain, &m);
   if (m.prio == 99) m.s = n == -1 ? String("Schlüssel falsch") : join ? String("Join-Request") : "FCnt " + String(u.fcnt16);
@@ -615,7 +637,8 @@ static String wmJson(const WmDev &d) {
          "\",\"type\":" + d.type + ",\"tname\":" + jstr(typeDe(d.type)) + ",\"ver\":" + d.ver + ",\"mode\":\"" +
          wmb::modeName(d.mode) + "\",\"ci\":" + d.ci + ",\"sec\":" + d.secMode + ",\"dec\":\"" +
          (d.lastMs ? wmb::decryptResultName(d.dec) : "") + "\",\"key\":" + (d.keySet ? "true" : "false") +
-         ",\"status\":" + d.status + ",\"stxt\":" + jstr(wmb::statusText(d.status)) + "}";
+         ",\"status\":" + d.status + ",\"stxt\":" + jstr(wmb::statusText(d.status)) + ",\"err\":" + d.errCnt +
+         ",\"erssi\":" + d.errRssi + ",\"eage\":" + (d.errMs ? String((millis() - d.errMs) / 1000) : String("null")) + "}";
 }
 static String wxJson(const WxDev &d) {
   char key[24]; wxKey(d, key);
@@ -709,6 +732,33 @@ static void handleDetail() {
     out += "],\"phy\":\"" + hexStr(d->phy, d->phyLen) + "\",\"plain\":\"" + plain + "\",\"dec\":" + n + "}";
   } else { s.send(400, "application/json", "{\"ok\":false}"); return; }
   s.send(200, "application/json", out);
+}
+
+// "Meine Geräte": every selected device with its readings, in one response
+template <typename D, int N, typename J, typename V>
+static void streamFav(String &chunk, bool &first, const char *t, D (&tab)[N], J json, V vals) {
+  for (auto &d : tab) {
+    if (!d.used || !d.selected) continue;
+    if (!first) chunk += ",";
+    first = false;
+    chunk += String("{\"t\":\"") + t + "\",\"dev\":" + json(d) + ",\"vals\":[";
+    ListCtx x{ &chunk, true };
+    vals(d, x);
+    chunk += "]}";
+    if (chunk.length() > 1200) { g_srv->sendContent(chunk); chunk = ""; }
+  }
+}
+static void handleFav() {
+  WebServer &s = *g_srv;
+  s.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  s.send(200, "application/json", "");
+  String chunk = "[";
+  bool first = true;
+  streamFav(chunk, first, "wm", g_wm, wmJson, [](WmDev &d, ListCtx &x) { wmValues(d, valToDetail, &x); });
+  streamFav(chunk, first, "wx", g_wx, wxJson, [](WxDev &d, ListCtx &x) { wxValues(d, valToDetail, &x); });
+  streamFav(chunk, first, "lw", g_lw, lwJson, [](LwDev &d, ListCtx &x) { lwValues(d, valToDetail, &x); });
+  s.sendContent(chunk + "]");
+  s.sendContent("");
 }
 
 static bool argOn(WebServer &s, const char *n) { return s.arg(n) == "1" || s.arg(n) == "true"; }
@@ -822,6 +872,9 @@ void unl_register_routes(WebServer &srv, WebServer::THandlerFunction (*guard)(We
   g_srv = &srv;
   srv.on("/meters", HTTP_GET, guard(handleMetersRedirect));   // old bookmark -> dashboard tab
   srv.on("/api/unl", HTTP_GET, guard(handleList));
+  srv.on("/api/unl/fav", HTTP_GET, guard(handleFav));
+  srv.on("/app.css", HTTP_GET, []() { sendGzipAsset(*g_srv, APP_CSS_GZ, "text/css; charset=utf-8"); });   // unguarded: login page uses it too
+  srv.on("/app.js", HTTP_GET, guard([]() { sendGzipAsset(*g_srv, APP_JS_GZ, "application/javascript; charset=utf-8"); }));
   srv.on("/api/unl/dev", HTTP_GET, guard(handleDetail));
   srv.on("/api/unl/dev", HTTP_POST, guard(handleSet));
   srv.on("/api/unl/log", HTTP_GET, guard(handleLog));

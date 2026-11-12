@@ -47,6 +47,16 @@ inline bool clientAcceptsGzip(WebServer &server) {
   return q > 0.0f;
 }
 
+// Shared stylesheet / script: same gzip rules, own content type.
+template<size_t N>
+void sendGzipAsset(WebServer &server, const uint8_t (&data)[N], const char *type) {
+  server.sendHeader("Vary", "Accept-Encoding");
+  if (!clientAcceptsGzip(server)) { server.send(406, "text/plain", "gzip required"); return; }
+  server.sendHeader("Cache-Control", "no-cache");   // tiny file; must never outlive a firmware update
+  server.sendHeader("Content-Encoding", "gzip");
+  server.send_P(200, type, reinterpret_cast<const char *>(data), N);
+}
+
 template<size_t N>
 void sendGzipHtml(WebServer &server, const uint8_t (&data)[N]) {
   server.sendHeader("Vary", "Accept-Encoding");

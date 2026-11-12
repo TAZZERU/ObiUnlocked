@@ -302,3 +302,23 @@ def test_smoke_detector_ei_head_and_labels(native):
     assert float(recs["dust_level"]["value"]) == 5 and recs["head_status"]["text"] == "OK"
     assert recs["last_alarm"]["date"] == "2025-12-31" and float(recs["alarms"]["value"]) == 2
     assert recs["status"]["text"] == "Batterie_schwach"      # TPL status 0x04 = power low
+
+
+# ---------------------------------------------------------------- weak reception (header-only identity)
+SMOKE_CRC_FAIL = ("54CD5E4425150582490" "60C1AA7CC7A6C00512538283"   # real capture: Ei smoke detector, body damaged
+                  "48A8A06469D6C851918EB96324265609" "88AF9")
+
+
+def test_peek_header_real_smoke_detector(native):
+    info, _ = run(native, "radio", SMOKE_CRC_FAIL)
+    assert info["rr"] != "0"                                    # full frame unusable ...
+    info, _ = run(native, "peek", SMOKE_CRC_FAIL)
+    assert info == {"ok": "1", "mfr": "EIE", "id": "06498205", "ver": "12", "type": "26", "mode": "C1a"}
+
+
+def test_peek_header_t1_and_damaged_header(native):
+    body = link_header(mfr="ZRI", ident=0x15757861, dev_type=0x16) + bytes([0x78]) + HCA_RECORDS
+    raw = bytearray(encode_3of6(frame_a(body)))
+    assert run(native, "peek", bytes(raw).hex())[0]["mfr"] == "ZRI"
+    raw[3] ^= 0x10                                              # flip a bit inside block 1
+    assert run(native, "peek", bytes(raw).hex())[0]["ok"] == "0"

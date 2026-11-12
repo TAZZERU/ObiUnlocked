@@ -142,6 +142,23 @@ RadioResult fromRadioS1(const uint8_t *raw, size_t rawLen, Frame &f) {
   return best;
 }
 
+bool peekHeader(const uint8_t *raw, size_t rawLen, bool s1, uint8_t hdr[10], uint8_t &mode) {
+  uint8_t b[12];
+  if (s1) {
+    for (int inv = 0; inv < 2; inv++)
+      if (decodeManchester(raw, rawLen, b, 12, inv != 0) == 12 && crcOk(b, 10)) { memcpy(hdr, b, 10); mode = MODE_S1; return true; }
+    return false;
+  }
+  if (rawLen >= 14 && raw[0] == 0x54 && raw[1] == 0xCD) {
+    if (!crcOk(raw + 2, 10)) return false;
+    memcpy(hdr, raw + 2, 10); mode = MODE_C1A; return true;
+  }
+  if (rawLen >= 2 && raw[0] == 0x54 && raw[1] == 0x3D) return false;
+  if (decode3of6(raw, rawLen, b, 12) != 12 || !crcOk(b, 10)) return false;
+  memcpy(hdr, b, 10); mode = MODE_T1;
+  return true;
+}
+
 // ============================================================================ link / transport layer
 void mfrCode(uint16_t m, char out[4]) {
   out[0] = (char)(((m >> 10) & 0x1F) + 64);

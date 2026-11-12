@@ -1,34 +1,37 @@
 <!doctype html><html><head><meta charset=utf-8><link rel=icon href=/favicon.svg>
-<meta name=viewport content='width=device-width,initial-scale=1'><title>ObiUnlocked — Settings</title><style>
-:root{--bg:#0a0e14;--panel:#141a23;--panel2:#1b2430;--line:#232e3c;--txt:#eaf0f7;--dim:#7d8da0;--accent:#31d07a;--amber:#e3b341;--red:#f0616d;--mono:ui-monospace,Menlo,Consolas,monospace}
-*{box-sizing:border-box}body{font-family:system-ui,sans-serif;margin:0;background:var(--bg);color:var(--txt)}
-header{display:flex;align-items:center;gap:12px;padding:11px 16px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}
-header b{font-size:15px}header a{color:var(--accent);text-decoration:none;font-size:13px;margin-left:12px}
-.seg{margin-left:auto;display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;overflow:hidden}.seg button{background:transparent;border:0;border-radius:0;color:var(--dim);padding:7px 12px;cursor:pointer;font-size:13px;font-weight:600}.seg button.act{background:var(--accent);color:#04140a}
+<meta name=viewport content='width=device-width,initial-scale=1'><title>ObiUnlocked — Einstellungen</title><link rel=stylesheet href=/app.css><style>
+
+
+.pagebar{display:flex;align-items:center;gap:12px;padding:11px 16px;background:var(--panel);border-bottom:1px solid var(--line);z-index:2}
+.pagebar b{font-size:15px}.pagebar a{color:var(--accent);text-decoration:none;font-size:13px;margin-left:12px}
+.seg{margin-left:auto;display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:6px;overflow:hidden}.seg button{background:transparent;border:0;border-radius:0;color:var(--dim);padding:7px 12px;cursor:pointer;font-size:13px;font-weight:600}.seg button.act{background:var(--accent);color:#fff}
 .wrap{max-width:44rem;margin:22px auto;padding:0 14px;display:flex;flex-direction:column;gap:18px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px 20px}
 h3{margin:0 0 10px;font-size:16px}
 label{display:block;font-size:12px;color:var(--dim);margin:10px 0 4px}
-input,select{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px 10px;font-size:14px;font-family:inherit}
+input,select{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:9px 10px;font-size:14px;font-family:inherit}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
-button{background:var(--accent);border:0;color:#052012;font-weight:700;border-radius:9px;padding:9px 16px;cursor:pointer;font-size:14px}
+button{background:var(--accent);border:0;color:#fff;font-weight:700;border-radius:6px;padding:9px 16px;cursor:pointer;font-size:14px}
 button.g{background:var(--panel2);color:var(--txt);border:1px solid var(--line);font-weight:600}
 button:disabled{opacity:.5;cursor:default}
 .stat{font-size:13px;color:var(--dim);margin-bottom:6px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
-.on{background:var(--accent)}.off{background:var(--red)}.idle{background:#5b6b60}
+.on{background:var(--accent)}.off{background:var(--red)}.idle{background:var(--mut)}
 .msg{font-size:12.5px;color:var(--dim)}hr{border:0;border-top:1px solid var(--line);margin:16px 0}
 .bar{height:9px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin:12px 0 6px;display:none}
 .bar.on{display:block}.fill{height:100%;width:0;background:var(--accent);transition:width .15s}
-.upd{background:linear-gradient(90deg,rgba(49,208,122,.16),rgba(49,208,122,.04));border:1px solid var(--accent);border-radius:11px;padding:14px;margin:6px 0 2px}
+.upd{background:var(--acbg);border:1px solid var(--accent);border-radius:6px;padding:14px;margin:6px 0 2px}
 .upd b{color:var(--accent);font-size:15px}.upd button{margin-top:10px;width:100%;padding:12px;font-size:15px}
 .okrow{color:var(--accent)}code{color:var(--accent);font-family:var(--mono)}
-</style></head><body>
-<header><b>ObiUnlocked · ⚙ Settings</b><span class=seg><button id=lde onclick="setL('de')">DE</button><button id=len onclick="setL('en')">EN</button></span><a href="/">← Dashboard</a></header>
+
+.pagebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;background:var(--p1);border-bottom:1px solid var(--ln);font-size:13px}
+.pagebar>b{font-size:15px;font-weight:600}
+</style></head><body data-page="settings"><script src=/app.js></script>
+<div class=pagebar><b>Einstellungen</b><span class=seg hidden><button id=lde onclick="setL('de')">DE</button><button id=len onclick="setL('en')">EN</button></span></div>
 <div class=wrap>
 
  <div class=card id=cwifi>
-  <h3>📶 WiFi</h3>
+  <h3>WiFi</h3>
   <div class=stat id=wfstat>…</div>
   <label id=lnet>Netzwerk (Scan)</label>
   <div style="display:flex;gap:8px"><select id=ssid style="flex:1"><option value="">— scan —</option></select>
@@ -48,7 +51,7 @@ button:disabled{opacity:.5;cursor:default}
  </div>
 
  <div class=card>
-  <h3>🌐 <span id=hstip>Statische IP</span></h3>
+  <h3><span id=hstip>Statische IP</span></h3>
   <div class=stat id=stipstat>…</div>
   <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
    <input type=checkbox id=stipon style="width:auto;margin:0"><span id=lstipon>Statische IP statt DHCP verwenden</span></label>
@@ -64,7 +67,7 @@ button:disabled{opacity:.5;cursor:default}
  </div>
 
  <div class=card>
-  <h3>⚙ MQTT</h3>
+  <h3>MQTT</h3>
   <div class=stat id=mqstat>…</div>
   <div class=grid>
    <div><label id=lhost>Server</label><input id=mh placeholder=192.168.1.10></div>
@@ -83,7 +86,7 @@ button:disabled{opacity:.5;cursor:default}
  </div>
 
  <div class=card>
-  <h3>🏷 <span id=hgwname>Gateway-Name</span></h3>
+  <h3><span id=hgwname>Gateway-Name</span></h3>
   <div class=stat id=gwnstat>…</div>
   <label id=lgwname>Anzeigename (leer = Standard, auch in Home Assistant)</label>
   <input id=gwname placeholder="ObiUnlocked …">
@@ -91,7 +94,7 @@ button:disabled{opacity:.5;cursor:default}
  </div>
 
  <div class=card>
-  <h3>🔒 <span id=hauth>Web-Zugang</span></h3>
+  <h3><span id=hauth>Web-Zugang</span></h3>
   <div class=stat id=austat>…</div>
   <div class=grid>
    <div><label id=lauser>Benutzer (leer = offen)</label><input id=au autocomplete=username></div>
@@ -103,7 +106,7 @@ button:disabled{opacity:.5;cursor:default}
  </div>
 
  <div class=card>
-  <h3>🕐 <span id=htime>Zeit</span></h3>
+  <h3><span id=htime>Zeit</span></h3>
   <div class=stat id=tzstat>…</div>
   <label id=ltz>Zeitzone</label>
   <select id=tzsel onchange=tzPick()>
@@ -124,7 +127,7 @@ button:disabled{opacity:.5;cursor:default}
  </div>
 
  <div class=card>
-  <h3>⚙ <span id=hmisc>Sonstiges</span></h3>
+  <h3><span id=hmisc>Sonstiges</span></h3>
   <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
    <input type=checkbox id=night style="width:auto;margin:0"><span id=lnight>Nachtmodus: normale LED-Aktivität aus</span></label>
   <div class=row><button type=button onclick=saveNightMode()><span id=bnsave>Speichern</span></button><span class=msg id=nmsg></span></div>
@@ -134,7 +137,7 @@ button:disabled{opacity:.5;cursor:default}
  </div>
 
  <div class=card>
-  <h3>🔋 <span id=heco>EcoFlow STREAM (EcoTracker-Emulation)</span></h3>
+  <h3><span id=heco>EcoFlow STREAM (EcoTracker-Emulation)</span></h3>
   <div class=stat id=ecostat>…</div>
   <div class=msg id=econote style="margin:2px 0 8px"></div>
   <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
@@ -155,7 +158,7 @@ button:disabled{opacity:.5;cursor:default}
  </div>
 
  <div class=card id=cble style=display:none>
-  <h3>📶 <span id=hble>BTHome (verschlüsselte BLE-Leistungsausgabe)</span></h3>
+  <h3><span id=hble>BTHome (verschlüsselte BLE-Leistungsausgabe)</span></h3>
   <div class=stat id=blestat>…</div>
   <div class=msg id=blenote style="margin:2px 0 8px"></div>
   <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
@@ -177,7 +180,7 @@ button:disabled{opacity:.5;cursor:default}
  </div>
 
  <div class=card>
-  <h3>📤 <span id=hftp>FTP-Backup der Historie</span></h3>
+  <h3><span id=hftp>FTP-Backup der Historie</span></h3>
   <div class=stat id=ftpstat>…</div>
   <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
    <input type=checkbox id=ftpen style="width:auto;margin:0"><span id=lftpen>Aktiviert</span></label>
@@ -217,7 +220,7 @@ button:disabled{opacity:.5;cursor:default}
  </div>
 
  <div class=card>
-  <h3>📡 <span id=hlora>LoRa-Reichweite</span></h3>
+  <h3><span id=hlora>LoRa-Reichweite</span></h3>
   <div class=stat id=lorastat>…</div>
   <label id=llorasf>Spreizfaktor (Spreading Factor)</label>
   <select id=lorasf onchange=loraSfChanged()><option value=7>SF7 (Standard)</option><option value=9>SF9 (mehr Reichweite, langsamer)</option></select>
@@ -227,7 +230,7 @@ button:disabled{opacity:.5;cursor:default}
  </div>
 
  <div class=card>
-  <h3>⬆ Firmware</h3>
+  <h3>Firmware</h3>
   <div class=stat id=fwcur>…</div>
   <div class=row style="margin-top:2px"><button class=g id=ghbtn onclick=ghCheck()>Auf Updates prüfen</button><button class=g id=ghdl onclick=ghUpdate()>Neueste neu laden</button></div>
   <div id=ghbox class=msg>GitHub wird geprüft…</div>
@@ -276,7 +279,7 @@ $('laplim').textContent=t('Hotspot nur 10 min nach Start oder Tastendruck','Hots
 $('hstip').textContent=t('Statische IP','Static IP');$('lstipon').textContent=t('Statische IP statt DHCP verwenden','Use a static IP instead of DHCP');
 $('lstipip').textContent=t('IP-Adresse','IP address');$('lstipsn').textContent=t('Subnetzmaske','Subnet mask');$('lstipgw').textContent=t('Gateway','Gateway');
 $('lstipd1').textContent=t('DNS 1','DNS 1');$('lstipd2').textContent=t('DNS 2 (optional)','DNS 2 (optional)');$('bstip').textContent=t('Speichern','Save');
-$('stipwarn').textContent=t('⚠️ Eine falsche IP/Gateway/Subnetzmaske kann das Dashboard über das Netzwerk unerreichbar machen — Wiederherstellung dann nur über den Werksreset-Taster am Gerät (setzt WLAN + alle Einstellungen zurück).','⚠️ A wrong IP/gateway/subnet mask can make the dashboard unreachable over the network — recovery then only via the device\'s factory-reset button (resets WiFi + all settings).');
+$('stipwarn').textContent=t('Eine falsche IP/Gateway/Subnetzmaske kann das Dashboard über das Netzwerk unerreichbar machen — Wiederherstellung dann nur über den Werksreset-Taster am Gerät (setzt WLAN + alle Einstellungen zurück).','A wrong IP/gateway/subnet mask can make the dashboard unreachable over the network — recovery then only via the device\'s factory-reset button (resets WiFi + all settings).');
 $('lhost').textContent=t('Server','Server');$('luser').textContent=t('Benutzer','User');$('lpass').textContent=t('Passwort','Password');
 $('ltopic').textContent=t('Basis-Topic','Base topic');$('bmsave').textContent=t('Speichern','Save');$('bdisc').textContent=t('Discovery senden','Send discovery');
 $('ltls').textContent=t('MQTTS (TLS-Verschlüsselung)','MQTTS (TLS encryption)');$('lca').textContent=t('CA-Zertifikat (PEM, optional)','CA certificate (PEM, optional)');
@@ -328,13 +331,13 @@ $('lftpusetm').textContent=t('Zu fester Uhrzeit hochladen','Upload at a fixed ti
 $('lftpwin').textContent=t('Datenfenster (Zeitraum je Export)','Data window (time span per export)');
 $('owinall').textContent=t('Alle gespeicherten Daten','All stored data');$('owin24h').textContent=t('Letzte 24 Stunden','Last 24 hours');
 $('owinprevday').textContent=t('Voriger Kalendertag','Previous calendar day');$('owin7d').textContent=t('Letzte 7 Tage','Last 7 days');$('owin30d').textContent=t('Letzte 30 Tage','Last 30 days');
-$('ftpwarn').textContent=t('⚠️ Reines FTP überträgt Zugangsdaten und Dateien unverschlüsselt — nur im vertrauenswürdigen lokalen Netzwerk verwenden, niemals über das offene Internet.','⚠️ Plain FTP transmits credentials and files unencrypted — only use this on a trusted local network, never across the open internet.');
+$('ftpwarn').textContent=t('Reines FTP überträgt Zugangsdaten und Dateien unverschlüsselt — nur im vertrauenswürdigen lokalen Netzwerk verwenden, niemals über das offene Internet.','Plain FTP transmits credentials and files unencrypted — only use this on a trusted local network, never across the open internet.');
 $('bftp').textContent=t('Speichern','Save');$('bftprun').textContent=t('Jetzt hochladen','Upload now');
 $('bftplog').textContent=t('Log anzeigen','Show log');
 $('hlora').textContent=t('LoRa-Reichweite','LoRa range');$('llorasf').textContent=t('Spreizfaktor (Spreading Factor)','Spreading factor');
 $('lorasf').options[0].textContent=t('SF7 (Standard)','SF7 (default)');$('lorasf').options[1].textContent=t('SF9 (mehr Reichweite, langsamer)','SF9 (more range, slower)');
 $('lorawarn').textContent=t('Nur ändern, wenn ALLE Reader bereits mit der passenden SF-Firmware geflasht sind — sonst verlieren sie sofort nach dem Neustart die Verbindung. Änderung wirkt erst nach einem Neustart des Gateways.','Only change this once ALL readers are already flashed with matching-SF firmware — otherwise they lose the connection the moment this reboots. Takes effect after a gateway reboot.');
-$('lorawarn9').textContent=t('⚠️ SF9 kostet deutlich mehr Sendezeit pro Übertragung (grob das 3,4-Fache) und damit spürbar mehr Akku beim Reader als SF7 — nur für Reader mit schwachem Empfang sinnvoll. Inoffizielle, ungetestete Anpassung der Reader-Firmware: Nutzung auf eigenes Risiko.','⚠️ SF9 costs noticeably more airtime per transmission (roughly 3.4×) and therefore meaningfully more reader battery than SF7 — only worth it for readers with a weak signal. An unofficial, off-label reader firmware patch: use at your own risk.');
+$('lorawarn9').textContent=t('SF9 kostet deutlich mehr Sendezeit pro Übertragung (grob das 3,4-Fache) und damit spürbar mehr Akku beim Reader als SF7 — nur für Reader mit schwachem Empfang sinnvoll. Inoffizielle, ungetestete Anpassung der Reader-Firmware: Nutzung auf eigenes Risiko.','SF9 costs noticeably more airtime per transmission (roughly 3.4×) and therefore meaningfully more reader battery than SF7 — only worth it for readers with a weak signal. An unofficial, off-label reader firmware patch: use at your own risk.');
 $('blorasave').textContent=t('Speichern','Save');
 let cfg=false,tzc=false,ghc=false,loraSfc=false,ftpc=false,ghBusy=false,ecoc=false,ecoSel='auto',ecoPairing=false,blec=false,bleSel='';
 function loraSfChanged(){$('lorawarn9').style.display=$('lorasf').value==='9'?'':'none';}
@@ -343,7 +346,7 @@ async function load(){try{
   $('wfstat').innerHTML=s.wifi?`<span class="dot on"></span>${t('Verbunden','Connected')} · ${s.ip} · ${s.wifi_rssi} dBm`:`<span class="dot off"></span>${t('nicht verbunden','offline')}`;
   if(s.ap)$('apstat').innerHTML=`<code>${s.ap.ssid}</code> — `+(s.ap.pass_set?`<span class="dot on"></span>${t('passwortgeschützt','password-protected')}`:`<span class="dot idle"></span>${t('offen — kein Passwort','open — no password')}`);
   const q=s.mqtt;
-  const tls=q.tls?' · 🔒TLS':'';
+  const tls=q.tls?' · TLS':'';
   $('mqstat').innerHTML=!q.enabled?`<span class="dot idle"></span>${t('deaktiviert','disabled')}`:q.connected?`<span class="dot on"></span>${t('verbunden','connected')} · ${q.host}${tls}`:`<span class="dot off"></span>${t('getrennt','disconnected')} — ${q.state}${tls}`;
   if(!cfg){cfg=true;$('mh').value=q.host||'';$('mp').value=q.port||1883;$('mu').value=q.user||'';$('mt').value=q.topic||'';
    $('mtls').checked=!!q.tls;if(q.ca_set)$('mca').placeholder=t('Zertifikat gespeichert — leer lassen zum Beibehalten','certificate saved — leave blank to keep');
@@ -400,8 +403,8 @@ async function load(){try{
   if(!tzc){tzc=true;$('tztext').value=s.tz||'';$('ntptext').value=s.ntp||'';$('tzsel').value=s.tz||'';if($('tzsel').value!==(s.tz||''))$('tzsel').value='';}
 }catch(e){}}
 function tzPick(){const v=$('tzsel').value;if(v)$('tztext').value=v;}
-async function saveNightMode(){const m=$('nmsg');m.textContent='…';try{const r=await(await fetch('/api/night_mode',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'enabled='+($('night').checked?'1':'0')})).json();if(!r.ok)throw Error();m.textContent=t('gespeichert ✓','saved ✓');setTimeout(()=>m.textContent='',3000);}catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
-async function saveNumFmt(){const m=$('numfmtmsg');m.textContent='…';try{const r=await(await fetch('/api/numfmt',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'fmt='+$('numfmt').value})).json();if(!r.ok)throw Error();m.textContent=t('gespeichert ✓','saved ✓');setTimeout(()=>m.textContent='',3000);}catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
+async function saveNightMode(){const m=$('nmsg');m.textContent='…';try{const r=await(await fetch('/api/night_mode',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'enabled='+($('night').checked?'1':'0')})).json();if(!r.ok)throw Error();m.textContent=t('gespeichert ','saved ');setTimeout(()=>m.textContent='',3000);}catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
+async function saveNumFmt(){const m=$('numfmtmsg');m.textContent='…';try{const r=await(await fetch('/api/numfmt',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'fmt='+$('numfmt').value})).json();if(!r.ok)throw Error();m.textContent=t('gespeichert ','saved ');setTimeout(()=>m.textContent='',3000);}catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
 // One /api/readers round trip fills both reader pickers (EcoTracker and BTHome). Only assigned meters
 // are offered: neither feature can publish a reader the gateway is not bound to.
 async function loadReaders(){try{const rs=await(await fetch('/api/readers')).json();
@@ -418,7 +421,7 @@ async function saveEco(){const m=$('ecomsg');m.textContent='…';
  b.set('src',$('ecosrc').value);b.set('stale',$('ecostale').value===''?300:$('ecostale').value);b.set('allow',$('ecoallow').value.trim());b.set('phase',$('ecoph').value);
  try{const r=await(await fetch('/api/ecotracker',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b})).json();
   if(r.err==='allow'){m.textContent=t('Allowlist ungültig — nur IPv4-Adressen / CIDR, kommagetrennt','invalid allowlist — IPv4 addresses / CIDR only, comma-separated');return;}
-  if(typeof r.enabled==='undefined')throw Error();m.textContent=t('gespeichert ✓','saved ✓');setTimeout(()=>m.textContent='',3000);ecoc=false;load();}
+  if(typeof r.enabled==='undefined')throw Error();m.textContent=t('gespeichert ','saved ');setTimeout(()=>m.textContent='',3000);ecoc=false;load();}
  catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
 async function ecoPair(){const m=$('ecomsg');m.textContent='…';
  try{const r=await(await fetch('/api/ecotracker',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'pairing='+(ecoPairing?'0':'1')})).json();
@@ -483,14 +486,14 @@ async function saveBle(){const m=$('blemsg'),k=$('blekey').value.trim();
   $('blekey').value='';$('blekey').type='password';
   if(k)$('blekeyhint').innerHTML=t('Bindkey gespeichert — beim Empfänger eintragen: ','Bindkey saved — enter it in the receiver: ')+`<code>${k.toLowerCase()}</code>`;
   if(d.key_set)$('blekey').placeholder=t('gespeichert — leer lassen zum Beibehalten','saved — leave blank to keep');
-  m.textContent=t('gespeichert ✓','saved ✓');setTimeout(()=>m.textContent='',3000);blec=false;await loadBle();}   // redraw before the 5 s poll
+  m.textContent=t('gespeichert ','saved ');setTimeout(()=>m.textContent='',3000);blec=false;await loadBle();}   // redraw before the 5 s poll
  catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
 function bleReboot(){if(!confirm(t('Gateway jetzt neu starten, damit Bluetooth startet?','Reboot the gateway now so Bluetooth starts?')))return;
  $('blemsg').textContent=t('Neustart…','rebooting…');fetch('/api/reboot',{method:'POST'}).catch(()=>{});
  setTimeout(()=>location.reload(),9000);}
 async function saveGwName(){const m=$('gwnmsg');m.textContent='…';
  try{const r=await(await fetch('/api/gwname',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'name='+encodeURIComponent($('gwname').value.trim())})).json();if(!r.ok)throw Error();
-  m.textContent=t('gespeichert ✓ — Discovery gesendet','saved ✓ — discovery sent');setTimeout(()=>m.textContent='',3000);load();}
+  m.textContent=t('gespeichert — Discovery gesendet','saved — discovery sent');setTimeout(()=>m.textContent='',3000);load();}
  catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
 async function saveFtp(){const b=new URLSearchParams();b.set('host',$('ftphost').value);b.set('port',$('ftpport').value||21);
  b.set('user',$('ftpuser').value);b.set('path',$('ftppath').value);b.set('enabled',$('ftpen').checked?'1':'0');
@@ -501,7 +504,7 @@ async function saveFtp(){const b=new URLSearchParams();b.set('host',$('ftphost')
  b.set('hh',$('ftphh').value||0);b.set('mm',$('ftpmm').value||0);b.set('window',$('ftpwin').value||0);
  const m=$('ftpmsg');m.textContent='…';
  try{const r=await(await fetch('/api/ftp',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b})).json();if(!r.ok)throw Error();
-  $('ftppass').value='';m.textContent=t('gespeichert ✓','saved ✓');setTimeout(()=>m.textContent='',3000);ftpc=false;load();}
+  $('ftppass').value='';m.textContent=t('gespeichert ','saved ');setTimeout(()=>m.textContent='',3000);ftpc=false;load();}
  catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
 async function ftpRunNow(){const m=$('ftpmsg');m.textContent='…';
  try{const r=await(await fetch('/api/ftp/run',{method:'POST'})).json();
@@ -537,10 +540,10 @@ async function saveLoraSf(){const sf=$('lorasf').value;
 async function saveTz(){const z=$('tztext').value.trim();if(!z){$('tzmsg').textContent=t('TZ eingeben','enter a TZ');return;}
  const n=$('ntptext').value.trim();if(!n){$('tzmsg').textContent=t('NTP-Server eingeben','enter an NTP server');return;}
  $('tzmsg').textContent='…';try{await fetch('/api/tz',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'tz='+encodeURIComponent(z)+'&ntp='+encodeURIComponent(n)});}catch(e){}
- $('tzmsg').textContent=t('gespeichert ✓','saved ✓');setTimeout(()=>$('tzmsg').textContent='',3000);load();}
+ $('tzmsg').textContent=t('gespeichert ','saved ');setTimeout(()=>$('tzmsg').textContent='',3000);load();}
 async function scan(){$('wfmsg').textContent=t('suche…','scanning…');$('bscan').disabled=true;
  try{let n=await(await fetch('/api/wifi/scan')).json();n.sort((a,b)=>b.rssi-a.rssi);let seen={},o=`<option value="">${t('— Netzwerk wählen —','— pick a network —')}</option>`;
-  for(let x of n){if(!x.ssid||seen[x.ssid])continue;seen[x.ssid]=1;o+=`<option>${x.ssid} (${x.rssi} dBm)${x.enc?' 🔒':''}</option>`;}
+  for(let x of n){if(!x.ssid||seen[x.ssid])continue;seen[x.ssid]=1;o+=`<option>${x.ssid} (${x.rssi} dBm)${x.enc?' ':''}</option>`;}
   $('ssid').innerHTML=o;
   if($('ssid').options.length>1){$('ssid').selectedIndex=1;$('ssid').onchange();}  // auto-pick the strongest so fresh results are obvious
   $('wfmsg').textContent=Object.keys(seen).length+t(' Netzwerke',' networks');}
@@ -555,8 +558,8 @@ async function saveApPass(){const p=$('appass').value;
  if(p&&p.length<8){$('apmsg').textContent=t('mind. 8 Zeichen (oder leer lassen)','8+ chars (or leave blank)');return;}
  $('apmsg').textContent='…';const r=await(await fetch('/api/appass',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'pass='+encodeURIComponent(p)})).json();
  if(!r.ok){$('apmsg').textContent=t('mind. 8 Zeichen (oder leer lassen)','8+ chars (or leave blank)');return;}
- $('appass').value='';$('apmsg').textContent=t('gespeichert ✓','saved ✓');setTimeout(()=>$('apmsg').textContent='',3000);load();}
-async function saveApLimit(){const m=$('aplmsg');m.textContent='…';try{const r=await(await fetch('/api/aplimit',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'enabled='+($('aplim').checked?'1':'0')})).json();if(!r.ok)throw Error();m.textContent=t('gespeichert ✓','saved ✓');setTimeout(()=>m.textContent='',3000);}catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
+ $('appass').value='';$('apmsg').textContent=t('gespeichert ','saved ');setTimeout(()=>$('apmsg').textContent='',3000);load();}
+async function saveApLimit(){const m=$('aplmsg');m.textContent='…';try{const r=await(await fetch('/api/aplimit',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'enabled='+($('aplim').checked?'1':'0')})).json();if(!r.ok)throw Error();m.textContent=t('gespeichert ','saved ');setTimeout(()=>m.textContent='',3000);}catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
 function validIp4(v){return /^(\d{1,3}\.){3}\d{1,3}$/.test(v)&&v.split('.').every(o=>+o>=0&&+o<=255);}
 async function saveStaticIp(){const on=$('stipon').checked;
  if(on){
@@ -575,30 +578,30 @@ async function saveStaticIp(){const on=$('stipon').checked;
   const r=await(await fetch('/api/staticip',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b})).json();
   if(!r.ok){$('stipmsg').textContent=t('Speichern fehlgeschlagen: ','save failed: ')+(r.err||'?');return;}
  }catch(e){}   // the gateway reboots right after answering -- a dropped connection here is expected, not a failure
- $('stipmsg').textContent=t('gespeichert ✓ — Gateway startet neu… Dashboard ggf. unter neuer IP erneut öffnen.','saved ✓ — gateway restarting… reopen the dashboard at the new IP if it changed.');}
+ $('stipmsg').textContent=t('gespeichert — Gateway startet neu… Dashboard ggf. unter neuer IP erneut öffnen.','saved — gateway restarting… reopen the dashboard at the new IP if it changed.');}
 async function saveMqtt(){const b=new URLSearchParams();b.set('host',$('mh').value);b.set('port',$('mp').value||1883);b.set('user',$('mu').value);b.set('topic',$('mt').value);if($('mpw').value)b.set('pass',$('mpw').value);
  b.set('tls',$('mtls').checked?'1':'0');if($('mca').value.trim())b.set('ca',$('mca').value.trim());  // blank CA = keep existing / encrypt-only
- $('mqmsg').textContent='…';await fetch('/api/mqtt',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b});$('mpw').value='';$('mqmsg').textContent=t('gespeichert ✓','saved ✓');setTimeout(()=>$('mqmsg').textContent='',3000);load();}
+ $('mqmsg').textContent='…';await fetch('/api/mqtt',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b});$('mpw').value='';$('mqmsg').textContent=t('gespeichert ','saved ');setTimeout(()=>$('mqmsg').textContent='',3000);load();}
 async function saveAuth(){const u=$('au').value.trim(),p=$('ap').value;
  if(u&&!p){$('aumsg').textContent=t('Benutzer und Passwort nötig','user and password required');return;}   // no user-without-password
  const b=new URLSearchParams();b.set('user',u);if(p)b.set('pass',p);
  $('aumsg').textContent='…';const r=await(await fetch('/api/auth',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b})).json();$('ap').value='';
  if(!r.ok){$('aumsg').textContent=t('Benutzer und Passwort nötig','user and password required');return;}
  if(u){location.href='/login';return;}   // auth on -> (re)login with the new credentials
- $('aumsg').textContent=t('gespeichert ✓','saved ✓');setTimeout(()=>$('aumsg').textContent='',4000);load();}
+ $('aumsg').textContent=t('gespeichert ','saved ');setTimeout(()=>$('aumsg').textContent='',4000);load();}
 async function logout(){await fetch('/api/logout',{method:'POST'});location.href='/login';}
-async function disc(){$('mqmsg').textContent='…';try{const r=await(await fetch('/api/rediscover',{method:'POST'})).json();$('mqmsg').textContent=r.ok?t('Discovery gesendet ✓','discovery sent ✓')+' ('+r.count+')':t('MQTT nicht verbunden','MQTT not connected');}catch(e){$('mqmsg').textContent='error';}setTimeout(()=>$('mqmsg').textContent='',4000);}
+async function disc(){$('mqmsg').textContent='…';try{const r=await(await fetch('/api/rediscover',{method:'POST'})).json();$('mqmsg').textContent=r.ok?t('Discovery gesendet ','discovery sent ')+' ('+r.count+')':t('MQTT nicht verbunden','MQTT not connected');}catch(e){$('mqmsg').textContent='error';}setTimeout(()=>$('mqmsg').textContent='',4000);}
 async function ghCheck(){const box=$('ghbox');box.className='msg';box.textContent=t('GitHub wird geprüft…','checking GitHub…');
  try{const r=await(await fetch('/api/github/latest')).json();
   if(r.version&&r.asset)$('ghdl').textContent=t('Neueste neu laden','Redownload latest')+': '+r.version;
   if(!r.ok){box.textContent=t('Keine Release-Info von GitHub (evtl. noch kein Release veröffentlicht).','No release info from GitHub (maybe no release published yet).');return;}
-  if(r.newer&&r.asset){box.className='upd';box.innerHTML=`<b>⬆ ${t('Update verfügbar','Update available')}: ${r.version}</b><br><span class=msg>${t('Aktuell','current')}: ${r.current}</span><button onclick=ghUpdate()>${t('Jetzt aktualisieren','Update now')}</button>`;}
+  if(r.newer&&r.asset){box.className='upd';box.innerHTML=`<b>${t('Update verfügbar','Update available')}: ${r.version}</b><br><span class=msg>${t('Aktuell','current')}: ${r.current}</span><button onclick=ghUpdate()>${t('Jetzt aktualisieren','Update now')}</button>`;}
   else if(r.newer&&!r.asset){box.textContent=`${t('Release','Release')} ${r.version} ${t('gefunden, aber kein Build für dieses Board im Release.','found, but no build for this board in the release.')}`;}
-  else{box.className='msg okrow';box.innerHTML=`✓ ${t('Aktuell','Up to date')} (${r.current}) — ${t('neuestes Release','latest release')}: ${r.version}`;}
+  else{box.className='msg okrow';box.innerHTML=`${t('Aktuell','Up to date')} (${r.current}) — ${t('neuestes Release','latest release')}: ${r.version}`;}
  }catch(e){box.textContent=t('GitHub-Prüfung fehlgeschlagen','GitHub check failed');}}
 async function ghUpdate(){if(!confirm(t('Firmware von GitHub laden und flashen? Das Gerät startet danach neu.','Download & flash firmware from GitHub? The device reboots afterwards.')))return;
  const box=$('ghbox');box.className='msg';
- box.innerHTML='⏳ '+t('lade & flashe von GitHub… (nicht trennen)','downloading & flashing from GitHub… (do not disconnect)')
+ box.innerHTML=''+t('lade & flashe von GitHub… (nicht trennen)','downloading & flashing from GitHub… (do not disconnect)')
    +'<div class="bar on" style="margin:10px 0 4px"><div class=fill id=ghfill></div></div><div id=ghp class=msg>0%</div>';
  // Pause the 5s /api/status poll (load()) for the duration -- it's a big JSON build on a device with only
  // ~320 KB RAM, and competing with it for heap is a real contributor to OTA download stalls on this board.
@@ -611,7 +614,7 @@ async function ghPoll(){try{const p=await(await fetch('/api/github/progress')).j
   const f=$('ghfill'),info=$('ghp');
   if(f)f.style.width=(p.pct||0)+'%';
   if(info)info.textContent=(p.pct||0)+'%'+(p.total?' · '+Math.round((p.done||0)/1024)+'/'+Math.round(p.total/1024)+' KB':'');
-  if(p.state==2){ghBusy=false;if(info)info.textContent='✓ '+t('fertig — Neustart läuft…','done — rebooting…');setTimeout(()=>location.href='/',10000);return;}
+  if(p.state==2){ghBusy=false;if(info)info.textContent=''+t('fertig — Neustart läuft…','done — rebooting…');setTimeout(()=>location.href='/',10000);return;}
   if(p.state==3){ghBusy=false;$('ghbox').className='msg';$('ghbox').textContent=t('Update fehlgeschlagen','Update failed')+(p.err?' — '+p.err:'')+' — '+t('aktuelle Firmware bleibt.','current firmware kept.');return;}
   setTimeout(ghPoll,700);
  }catch(e){setTimeout(()=>location.href='/',10000);}}  // a failing poll usually means it's rebooting
@@ -619,7 +622,7 @@ async function saveGhAuto(){const en=$('ghauto').checked;
  const mult=parseInt($('ghivlu').value)||1,n=Math.max(1,parseInt($('ghivln').value)||24),hours=n*mult;
  const b=new URLSearchParams();b.set('enabled',en?'1':'0');b.set('repo',$('ghrepo').value.trim());b.set('interval_h',hours);
  $('ghautomsg').textContent='…';await fetch('/api/github/auto',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b});
- $('ghautomsg').textContent=t('gespeichert ✓','saved ✓');setTimeout(()=>$('ghautomsg').textContent='',3000);ghc=false;load();}
+ $('ghautomsg').textContent=t('gespeichert ','saved ');setTimeout(()=>$('ghautomsg').textContent='',3000);ghc=false;load();}
 function upload(){let f=$('file').files[0];if(!f){$('upmsg').textContent=t('erst eine .bin wählen','pick a .bin first');return;}
  $('upbtn').disabled=true;$('bar').classList.add('on');$('upmsg').textContent=t('lade hoch','uploading')+' '+f.name+'…';
  let fd=new FormData();fd.append('firmware',f);let x=new XMLHttpRequest();x.open('POST','/api/selfupdate');

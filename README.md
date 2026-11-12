@@ -1,116 +1,96 @@
 # ObiUnlocked
 
-Firmware für das **OBI/heyOBI-Energie-Gateway** (ESP32-C3 + SX1262). Sie macht das Gerät zu einem lokalen
-868-MHz-Empfänger für die ganze Wohnung:
+**Local firmware for the OBI / heyOBI energy gateway (ESP32-C3 + SX1262) that turns it into an 868 MHz
+receiver for your whole flat.** Your OBI electricity-meter reader keeps working. In the radio's idle time the
+gateway also picks up the meters, smoke detectors and sensors around you, shows them in a web dashboard in plain
+words, and sends the ones you choose to MQTT / Home Assistant. No cloud.
 
-- **OBI-Stromzähler-Lesekopf:** funktioniert wie mit OpenOBI und hat beim Funk immer Vorrang
-- **wireless M-Bus:** Heizkostenverteiler, Rauchmelder, Wasser-, Wärme- und Gaszähler (Minol, Zenner, Qundis,
-  Techem, ista, Diehl, Kamstrup …)
-- **Funk-Wettersensoren:** LaCrosse/TFA IT+, Bresser 5-in-1/6-in-1/7-in-1
-- **LoRaWAN:** Monitor für Geräte in der Umgebung, mit eigenen Session-Keys auch mit entschlüsselten Messwerten
+> German version: [README.de.md](README.de.md) · Based on [OpenOBI](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud)
+> by atc1441 and contributors (upstream docs: [OPENOBI.md](OPENOBI.md))
 
-Alles erscheint im Dashboard des Gateways mit verständlichen Bezeichnungen, also „Zählerstand“, „Stand am
-Stichtag“ oder „Letzter Alarm“ statt Rohdaten. Einzelne Geräte gibst du per Schalter an MQTT und Home Assistant
-weiter.
+| | |
+|---|---|
+| **OBI meter reader** | Everything OpenOBI does (pairing, decryption, import/export/power, history, reader OTA). It always gets the radio first. |
+| **wireless M-Bus** (T1, C1, S1) | Heat cost allocators, water / heat / gas meters and smoke detectors from Minol, Zenner, Qundis, Techem, ista, Diehl, Kamstrup, Ei Electronics and others |
+| **Weather sensors** (868.3 MHz) | LaCrosse / TFA IT+, Bresser 5-in-1 / 6-in-1 / 7-in-1 |
+| **LoRaWAN** | Monitor for the uplinks around you. With your own device's session keys it also decrypts the payload and decodes Cayenne LPP. |
 
-ObiUnlocked ist ein Fork von [OpenOBI](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud) (atc1441).
-Dessen Doku, also Reverse Engineering, eigene Cloud und Flashen des Original-Gateways, liegt unverändert in
-[OPENOBI.md](OPENOBI.md) und den nummerierten Ordnern.
+Readings show up as *meter reading*, *value at due date*, *consumption since due date*, *last alarm*,
+*battery voltage* and so on, never as raw bytes. The same names, units and Home Assistant device / state classes
+go out over MQTT.
 
-> Nur Empfang: ObiUnlocked sendet auf wM-Bus, LoRaWAN und den Wetterfrequenzen nichts. Lies nur Geräte aus, deren
-> Daten dir zustehen. Lizenz: PolyForm Noncommercial (siehe [LICENSE](LICENSE)), wie beim Originalprojekt.
+## Install
 
-## Installation
+**Gateway already runs OpenOBI:** open its web UI → *Settings → Firmware*, upload `firmware.bin`. WiFi, MQTT,
+paired readers and history are kept. A broken image is rejected and the running firmware stays.
 
-**OpenOBI läuft schon auf dem Gateway:** Öffne im Browser **Einstellungen → Firmware**, lade `firmware.bin` hoch,
-fertig. WLAN, MQTT, gekoppelte Leseköpfe und die Historie bleiben erhalten. Ein fehlerhaftes Image weist das
-Gateway ab, die laufende Firmware bleibt dann unverändert.
+**Stock gateway:** do the one-time conversion described by OpenOBI
+([stock gateway → custom firmware](OPENOBI.md#stock-to-custom)). Every later update goes through the web UI.
 
-**Original-Gateway mit Hersteller-Firmware:** Einmalig den Weg aus OpenOBI gehen
-([Stock-Gateway → eigene Firmware](OPENOBI.md#stock-to-custom)). Danach geht jedes Update über die Weboberfläche.
-
-**Bauen:**
+**Build it yourself:**
 
 ```bash
 cd obiunlocked
 pip install platformio
-pio run -e obi_gateway_c3        # -> .pio/build/obi_gateway_c3/firmware.bin
+pio run -e obi_gateway_c3          # -> .pio/build/obi_gateway_c3/firmware.bin
+pio run -e obi_gateway_c3 -t push  # build + upload, address/login in platformio.local.ini
 ```
 
-Mit `pio run -e obi_gateway_c3 -t push` wird gebaut und direkt hochgeladen. Adresse und Login stehen in
-`platformio.local.ini` (siehe `platformio.local.ini.example`). Die anderen Board-Varianten aus OpenOBI
-(Heltec, LILYGO, XIAO, generic) bauen genauso.
+The other OpenOBI boards (Heltec Vision Master / WiFi LoRa 32 V3, LILYGO T-Beam, Seeed XIAO S3, generic ESP32 /
+ESP32-S3 + SX1262) build the same way. Releases built by CI carry a `.bin` for each of them.
 
-## Dashboard
+## Using it
 
-| Bereich | Inhalt |
+The web UI has one navigation bar on every page and works on phones:
+
+| Page | What it is for |
 |---|---|
-| **Stromzähler** | OBI-Leseköpfe: Bezug, Einspeisung, Leistung, Batterie, Intervall, Binden, Namen, Kachel-Layout, Lesekopf-Firmware per LoRa |
-| **Funkgeräte** | Alle empfangenen Geräte als Liste: Name/Typ, Hersteller, **aktueller Wert**, Signal, zuletzt gesehen, Verschlüsselung. Filter nach Zähler / Heizkosten / Rauchmelder / Wetter / LoRaWAN. Ein Klick öffnet die Details. |
-| **Empfang** | Welche Empfänger aktiv sind, Aufteilung der Funkzeit, Statistik, Live-Log |
+| **Power meters** | OBI readers: readings, binding, names, tile layout, report interval, reader firmware over LoRa |
+| **My devices** | The radio devices you added, with all their readings. **Only these are sent to MQTT / Home Assistant.** |
+| **Nearby** | Everything the gateway hears, neighbours included. Filter by meters / heat cost / smoke detectors / weather / LoRaWAN, then *Add* what is yours. Click a row for details, name, keys, raw telegrams. |
+| **Reception** | Which receivers run, how airtime is split, statistics, live log |
+| **History / OBI radio / Settings / Debug** | From OpenOBI: energy history, LoRa packet log, WiFi / MQTT / login / firmware, flash tools |
+| **Help** | Built-in manual (German) |
 
-In den **Details** eines Geräts:
-- alle Messwerte mit deutscher Bezeichnung und Einheit
-- Name vergeben
-- AES-Schlüssel eintragen (wM-Bus) bzw. NwkSKey/AppSKey (LoRaWAN)
-- Technik-Infos und Rohdaten (Telegramm und entschlüsselter Klartext)
-- Gerät vergessen
+**Encrypted devices.** Most metering services send AES-128 encrypted. Without the key you still see
+manufacturer, ID, type, signal and status. Ask the metering company, or your landlord, for the device key and
+quote the ID shown in the list. Enter it in the device details to see every reading. Security modes 5 and 7 are
+supported.
 
-Die übrigen Seiten (Verlauf, OBI-Funk, Einstellungen, Debug) stammen aus OpenOBI.
+**"Reception too weak".** The gateway heard the device, but the telegram had bit errors. The first block has its
+own checksum, so manufacturer, ID and type are still trustworthy and the device appears with an error counter.
+Move the gateway higher or more central, or switch off receivers you don't need, until the readings come through.
 
-## Was ausgewertet wird
+## How the radio is shared
 
-| Gerät | Ohne Schlüssel | Mit Schlüssel / Details |
-|---|---|---|
-| Unverschlüsselte OMS-Zähler (z. B. Qundis, viele Wasserzähler) | Zählerstand, Stichtagswerte, Datum, Status | – |
-| Qundis Walk-by (herstellereigener Block) | Zählerstand, Stand am Jahres- und Monatsstichtag, Verbrauch seit Stichtag, Fehlerdatum | – |
-| Techem Heizkostenverteiler / Wasserzähler | aktuelle und vorige Periode, Stichtage, Raum-/Heizkörpertemperatur | – |
-| Diehl/Sappel IZAR-Wasserzähler | Zählerstand, Monatswert, Batterie-Restlaufzeit | – |
-| Minol, Zenner, ista, Techem (verschlüsselt, AES Mode 5/7) | Hersteller, ID, Typ, Signal, Status | alle Messwerte |
-| Rauchmelder (OMS, Ei-Electronics-Bauart) | Status | letzter Alarm, Anzahl Alarme, Demontagen, Testknopf, Verschmutzung, Batteriespannung, Fehlertext |
-| LaCrosse IT+ | Temperatur, Luftfeuchte, Batterie | – |
-| Bresser 5/6/7-in-1 | Temperatur, Feuchte, Wind, Regen, UV, Licht (6/7-in-1 experimentell) | – |
-| LoRaWAN | DevAddr, Frame-Zähler, Port, Signal; bei Join-Requests die DevEUI | Nutzdaten, Cayenne LPP als Messwerte |
-
-Aus Zählerstand und Stichtagswert errechnet die Firmware zusätzlich **„Verbrauch seit Stichtag“**.
-
-**AES-Schlüssel** für Messdienst-Geräte bekommst du vom Messdienst bzw. über Vermieter oder Hausverwaltung, mit
-den Geräte-IDs aus der Liste. Ohne Schlüssel lassen sich verschlüsselte Werte nicht lesen.
-
-## Wie der Funkchip geteilt wird
-
-Der SX1262 hört immer nur eine Modulation. Jede Sekunde läuft so ab:
+The SX1262 hears one modulation at a time. Every second runs like this:
 
 ```
-0 ms        OBI-Beacon (LoRa 869,5 MHz), dann OBI-Hörfenster (300 ms, verlängert sich bei OBI-Verkehr)
-~300 ms     Umschalten (~1–2 ms, ohne Chip-Reset) auf einen Empfänger:
-              wM-Bus T1/C1 (868,95 MHz) jede zweite Sekunde,
-              sonst reihum: wM-Bus S1, Bresser, LaCrosse (868,3 MHz), LoRaWAN (Kanäle/SF reihum)
-970 ms      zurück auf LoRa; läuft gerade ein Telegramm, wird bis zu 25 ms gewartet
+0 ms      OBI beacon (LoRa 869.5 MHz), then a 300 ms OBI window (extended while OBI frames arrive)
+~300 ms   switch (~1-2 ms, no chip reset) to one receiver:
+            wM-Bus T1/C1 every other second, otherwise in turn S1, Bresser, LaCrosse, LoRaWAN
+970 ms    back to LoRa; a frame that is mid-air gets up to 25 ms to finish
 ```
 
-Komplett auf OBI bleibt der Chip in diesen Fällen:
-- beim Koppeln eines Lesekopfs, beim Lesekopf-Update und im „Alle binden“-Fenster
-- in den ersten 2 Minuten nach dem Start
-- rund um jeden fälligen Zählerstand eines Lesekopfs
+The radio stays on OBI for the whole second in these cases:
+- while a reader pairs, while a reader OTA runs, and during "bind all"
+- for the first 2 minutes after boot
+- around every reader's due report
 
-Je weniger Empfänger aktiv sind (Tab **Empfang**), desto öfter kommt jeder dran. Funk-Zähler wiederholen ihre Daten
-ständig, Heizkostenverteiler etwa alle paar Minuten, deshalb kommt trotz Zeitteilung jeder Wert an. Rauchmelder
-senden teils nur wenige Male am Tag. Bis ein Rauchmelder auftaucht, kann es deshalb dauern.
+Meters repeat their data constantly, so sharing costs latency, not data. Smoke detectors send only a few times a
+day, so they can take a while to show up.
 
 ## MQTT / Home Assistant
 
-Das Basis-Topic ist dasselbe wie in OpenOBI (Einstellungen → MQTT).
-
-| Topic | Inhalt |
+| Topic | Payload |
 |---|---|
-| `<base>/wmbus/<HERSTELLER><ID>` | `{"rssi","count","last_seen","id","mfr","type","mode","decryption","v":{…}}` |
-| `<base>/weather/<protokoll>-<id>` | `{"rssi","count","last_seen","channel","v":{"temperature","humidity",…}}` |
+| `<base>/wmbus/<MFR><ID>` | `{"rssi","count","last_seen","id","mfr","type","mode","decryption","v":{…}}` |
+| `<base>/weather/<protocol>-<id>` | `{"rssi","count","last_seen","channel","v":{"temperature","humidity",…}}` |
 | `<base>/lorawan/<DevAddr>` | `{"rssi","count","last_seen","fcnt","fport","snr","sf","freq","v":{…}}` |
-| `…/status` | `online` / `offline` (nach einstellbarer Zeit ohne Empfang, Standard 26 h) |
-| `homeassistant/device/obiu_…/config` | HA-Geräte-Discovery: ein Gerät mit allen Sensoren |
+| `…/status` | `online` / `offline`, configurable timeout, default 26 h |
+| `homeassistant/device/obiu_…/config` | Device-based discovery: one HA device with all its sensors |
 
-Beispiel, dein Qundis-Wasserzähler:
+Example (a Qundis water meter):
 
 ```json
 {"rssi":-111,"count":12,"last_seen":"2026-11-12T17:03:11Z","id":"13682041","mfr":"QDS","type":"Wasserzähler",
@@ -119,56 +99,81 @@ Beispiel, dein Qundis-Wasserzähler:
       "volume_since_due":17.668,"datetime":"2026-11-12T17:03"}}
 ```
 
-Die Werte haben feste Einheiten: kWh, m³, °C, W, mm. Gerätklassen und State-Classes sind gesetzt, Wasser-, Gas-
-und Wärmezähler erscheinen deshalb direkt im HA-Energie-Dashboard. Schaltest du ein Gerät ab oder vergisst es,
-entfernt die Firmware es auch aus Home Assistant. Voraussetzung ist **Home Assistant 2024.11 oder neuer**
-(MQTT-Geräte-Discovery).
+- **Value keys** are stable: quantity + `_max` / `_min` / `_err` + `_s<n>` (storage, `_s1` = due date) + `_t<n>`
+  (tariff).
+- **Units:** kWh, m³, °C, W, mm.
+- **Energy dashboard:** water, gas and heat meters plug straight into the HA energy dashboard.
+- **Removal:** removing a device from *My devices* also removes it from Home Assistant.
+- **Requirement:** Home Assistant 2024.11 or later.
 
-## Entwicklung
+## What gets decoded
+
+| Source | Without key | With key |
+|---|---|---|
+| Plain OMS meters (e.g. many water meters) | readings, due-date values, dates, status | – |
+| Qundis walk-by block | meter reading, year- and month-end values, consumption since due date | – |
+| Techem HCA / water (FHKV III, MK Radio 3/4) | current and previous period, due dates, room / radiator temperature | – |
+| Diehl / Sappel IZAR water | reading, month value, battery years | – |
+| Encrypted OMS (Minol, Zenner, ista, Techem …) | ID, type, signal, status | all readings |
+| Smoke detectors (OMS, Ei Electronics type) | status | last alarm, alarm / removal / test counters, dust level, battery voltage, fault text |
+| LaCrosse IT+ · Bresser 5/6/7-in-1 | temperature, humidity, wind, rain, UV, light (6/7-in-1 experimental) | – |
+| LoRaWAN | DevAddr, frame counter, port, signal; DevEUI of join requests | payload, Cayenne LPP readings |
+
+Not supported:
+- wM-Bus link-layer encryption (CI 0x8D / 0x8F)
+- Kamstrup compact frames
+- T1 telegrams above ~170 bytes
+
+LoRaWAN listens to one channel/SF at a time. SF11/12 are available only with OBI disabled, because those frames
+are longer than the idle time.
+
+## Development
 
 ```bash
 cd obiunlocked
-pip install pytest pycryptodome          # OpenSSL-Header nötig (macOS: brew install openssl)
-python -m pytest tests/test_wmbus.py tests/test_radio_cores.py
+pip install -r tests/requirements.txt          # needs OpenSSL headers (macOS: brew install openssl)
+python -m pytest tests                          # 60+ host tests, decoders built with ASan/UBSan
 ```
 
-Die Decoder sind plattformunabhängig und werden auf dem Rechner getestet. Grundlage sind:
-- Referenz-Telegramme aus wmbusmeters und rtl_433
-- ein echtes Qundis-Telegramm
-- ein unabhängiger Python-Encoder (AES, CMAC, CRC, 3-aus-6, Manchester)
+The decoders are plain C++ and are tested on the host against:
+- reference telegrams from wmbusmeters and rtl_433
+- real captures from the field
+- an independent Python encoder (AES, CMAC, CRC, 3-out-of-6, Manchester)
 
-| Datei | Aufgabe |
+| Path | Role |
 |---|---|
-| `src/wmbus_core.cpp` | wM-Bus: T1/C1/S1, CRC, ELL/AFL/TPL, AES Mode 5/7, DIF/VIF, Hersteller-Formate, Interpretation |
-| `src/wx_core.cpp` | LaCrosse IT+, Bresser 5/6/7-in-1 |
-| `src/lorawan_core.cpp` | LoRaWAN-Uplinks: Parsing, MIC, Entschlüsselung, Cayenne LPP |
-| `src/unl.cpp` | Gerätelisten, Telegramm-Cache, NVS, Web-API `/api/unl*`, MQTT + HA |
-| `src/main.cpp` (Abschnitt *shared-radio scheduler*) | Zeitscheiben des Funkchips |
-| `web/index.html` | Dashboard |
+| `obiunlocked/src/wmbus_core.cpp` | wM-Bus: T1/C1/S1, CRC, ELL/AFL/TPL, AES mode 5/7, DIF/VIF, manufacturer formats, interpretation |
+| `obiunlocked/src/wx_core.cpp` | LaCrosse IT+, Bresser 5/6/7-in-1 |
+| `obiunlocked/src/lorawan_core.cpp` | LoRaWAN uplink parsing, MIC, decryption, Cayenne LPP |
+| `obiunlocked/src/unl.cpp` | device tables, telegram cache, NVS, `/api/unl*`, MQTT + HA discovery |
+| `obiunlocked/src/main.cpp` | OpenOBI gateway + the *shared-radio scheduler* section |
+| `obiunlocked/web/` | `index.html` (dashboard), `app.css` / `app.js` (shared look and nav), the OpenOBI pages |
 
-**Speicher:** Das Radio-Log nutzt einen gemeinsamen 4-KB-Puffer statt fester 15 KB, und es gibt 16 statt
-64 Lesekopf-Plätze. Dadurch liegt der feste RAM-Bedarf (~89 KB) trotz der neuen Funktionen auf dem Niveau des
-Originals.
+**Footprint (C3):**
+- about 90 KB static RAM, the same as plain OpenOBI. The radio log was moved to a shared pool and the reader
+  table trimmed.
+- web pages are minified and gzip-compressed into flash.
+- CI checks that the image stays clear of the 256 KB history reserve in the OTA slot.
 
-Updates aus OpenOBI übernehmen:
+**Staying in sync with OpenOBI:**
 
 ```bash
-git fetch upstream
-git merge upstream/main
+git remote add upstream https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud.git
+git fetch upstream && git merge upstream/main
 ```
 
-Die automatische GitHub-Update-Prüfung von OpenOBI ist hier **aus**, solange unter Einstellungen → Firmware kein
-Repository eingetragen ist. Ein OpenOBI-Release würde sonst ObiUnlocked überschreiben.
+The in-app GitHub updater only looks for releases once you enter a repository under *Settings → Firmware*, for
+example your fork. Otherwise an OpenOBI release would replace ObiUnlocked.
 
-## Grenzen
+## Legal
 
-- Die Zeitscheiben-Steuerung ist auf echter Hardware noch wenig erprobt. Fehlen OBI-Werte, das Hörfenster erhöhen
-  oder Empfänger abschalten.
-- Nicht unterstützt:
-  - wM-Bus mit ELL-Verschlüsselung (CI 0x8D/0x8F)
-  - Kamstrup-Kompakttelegramme
-  - Telegramme über ~170 Byte (T1)
-- Bresser 6-in-1 und 7-in-1 sind nach rtl_433 umgesetzt, aber nicht mit echter Hardware geprüft.
-- LoRaWAN: Pro Zeitscheibe wird nur ein Kanal mit einem SF gehört. SF11/12 geht nur ohne OBI.
-- Speicherplätze: 80 wM-Bus-, 16 Wetter- und 24 LoRaWAN-Geräte. Ist die Liste voll, ersetzt die Firmware das am
-  längsten stumme Gerät ohne Auswahl und ohne Namen.
+- **License:** [PolyForm Noncommercial 1.0.0](LICENSE), inherited from OpenOBI. Personal, hobby, research and
+  other noncommercial use, modification and sharing are fine. Selling it or using it commercially is not. Keep
+  the `LICENSE` file and the `Required Notice` lines when you share it ([NOTICE.md](NOTICE.md)).
+- **Third-party:** libraries and reference sources are listed in [NOTICE.md](NOTICE.md). No vendor firmware is
+  needed to build ObiUnlocked.
+- **Radio:** ObiUnlocked only receives on wM-Bus / LoRaWAN / weather frequencies. Many countries restrict what
+  you may do with radio traffic that is not meant for you. In Germany, §5 TDDDG prohibits intercepting such
+  messages. *Nearby* inevitably lists your neighbours' devices, so only add, decrypt and forward devices whose
+  data belongs to you.
+- **Use at your own risk.** Flashing replaces the vendor firmware. Read [DISCLAIMER.md](DISCLAIMER.md).

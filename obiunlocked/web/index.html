@@ -1,124 +1,20 @@
 <!doctype html><html lang="de"><head><meta charset="utf-8"><link rel="icon" href="/favicon.svg">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>ObiUnlocked</title>
-<style>
-:root{--bg:#f4f5f7;--p1:#fff;--p2:#f7f8fa;--p3:#eceef2;--ln:#d9dde3;--tx:#1d2330;--dim:#5b6575;--mut:#8b94a3;
---ac:#2f6db5;--acbg:#e8f0fa;--ok:#2e7d4f;--am:#a8650b;--rd:#b42c2c;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-@media (prefers-color-scheme:dark){:root{--bg:#16181c;--p1:#1d2026;--p2:#22262d;--p3:#2a2f37;--ln:#353b45;--tx:#e3e6eb;--dim:#9aa3b0;--mut:#6c7583;
---ac:#6ea0dc;--acbg:#23324a;--ok:#5fb37f;--am:#d9a24a;--rd:#e07070}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}button,input,select{font:inherit;color:inherit}
-.mono{font-family:var(--mono)}.dim{color:var(--dim)}.mut{color:var(--mut)}.sp{flex:1}
-header{background:var(--p1);border-bottom:1px solid var(--ln)}
-.top{display:flex;align-items:center;gap:14px;padding:9px 20px;max-width:1280px;margin:0 auto;flex-wrap:wrap}
-.brand b{font-size:15px;font-weight:600}.brand span{font-size:12.5px;color:var(--dim);margin-left:8px}
-.chips{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px}
-.chip{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;color:var(--dim)}.chip b{color:var(--tx);font-weight:600}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--mut);flex:none}.dot.on{background:var(--ok)}.dot.off{background:var(--rd)}.dot.warn{background:var(--am)}
-.tools{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
-.btn{background:var(--p1);border:1px solid var(--ln);border-radius:5px;padding:5px 10px;cursor:pointer;font-size:13px;white-space:nowrap;color:var(--tx);display:inline-flex;align-items:center;gap:6px}
-.btn:hover{background:var(--p2);text-decoration:none}.btn.pri{background:var(--ac);border-color:var(--ac);color:#fff}.btn.pri:hover{filter:brightness(1.08)}
-.btn.bad{color:var(--rd)}.btn.sm{padding:3px 8px;font-size:12px}.btn:disabled{opacity:.5;cursor:not-allowed}
-.tools a.btn,.tools button.btn{border-color:transparent;color:var(--dim)}.tools .btn:hover{color:var(--tx);background:var(--p2)}
-.seg{display:inline-flex;border:1px solid var(--ln);border-radius:5px;overflow:hidden}
-.seg button{background:var(--p1);border:0;padding:4px 9px;cursor:pointer;color:var(--dim);font-size:12px}.seg button.on{background:var(--p3);color:var(--tx);font-weight:600}
-nav.tabs{display:flex;gap:2px;max-width:1280px;margin:0 auto;padding:0 20px;overflow-x:auto}
-nav.tabs a{padding:8px 12px;color:var(--dim);border-bottom:2px solid transparent;white-space:nowrap}nav.tabs a:hover{color:var(--tx);text-decoration:none}
-nav.tabs a.on{color:var(--tx);border-color:var(--ac);font-weight:600}nav.tabs a .n{font-size:11.5px;color:var(--mut);margin-left:5px;font-weight:400}
-main{max-width:1280px;margin:0 auto;padding:16px 20px 30px}
-section[hidden]{display:none}
-.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-.note{color:var(--dim);font-size:12.5px;line-height:1.55}.note b{color:var(--tx);font-weight:600}
-.card{background:var(--p1);border:1px solid var(--ln);border-radius:6px;padding:12px 14px}
-.empty{padding:24px;text-align:center;color:var(--dim)}
-input[type=text],input[type=number],input:not([type]),select{background:var(--p1);border:1px solid var(--ln);border-radius:5px;padding:5px 8px;min-width:0}
-input:focus,select:focus{outline:2px solid var(--acbg);border-color:var(--ac)}
-label.ck{display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
-input[type=checkbox]{accent-color:var(--ac);width:15px;height:15px;margin:0}
-.tag{font-size:11.5px;padding:1px 6px;border-radius:3px;border:1px solid var(--ln);color:var(--dim);white-space:nowrap}
-.tag.ok{color:var(--ok)}.tag.warn{color:var(--am)}.tag.bad{color:var(--rd)}.tag.info{color:var(--dim)}
-.readers{display:flex;flex-direction:column;gap:10px}
-.rc.pend{opacity:.7}
-.rh{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.rh .nm{font-size:15.5px;font-weight:600}.rh .meta{color:var(--dim);font-size:12px}
-.ib{background:none;border:1px solid var(--ln);color:var(--dim);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px}
-.ib:hover{color:var(--tx)}.ib.on{color:var(--ac);border-color:var(--ac)}.ib.del:hover{color:var(--rd)}.ib:disabled{opacity:.4;cursor:not-allowed}
-.uuid{font-family:var(--mono);font-size:11.5px;color:var(--mut);margin:4px 0 10px;word-break:break-all}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--ln);border:1px solid var(--ln);border-radius:5px;overflow:hidden}
-.tile{padding:8px 12px;min-width:0;position:relative;background:var(--p2)}
-.tile .l{font-size:12px;color:var(--dim)}
-.tile .v{font-family:var(--mono);font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
-.tile .v small{font-size:12px;color:var(--dim);margin-left:4px}.tile .v.na{color:var(--mut)}
-.batt{height:3px;background:var(--p3);margin-top:5px}.batt>i{display:block;height:100%}
-.tile.edit{cursor:grab;padding-top:30px}.tile.edit.hid{opacity:.5}.tile.drag{outline:2px dashed var(--ac);outline-offset:-2px}
-.tile .bh,.tile .be{position:absolute;top:5px;height:20px;border-radius:3px;border:1px solid var(--ln);background:var(--p1);font-size:11px;display:grid;place-items:center}
-.tile .bh{left:5px;width:22px;pointer-events:none;color:var(--mut)}.tile .be{right:5px;cursor:pointer;padding:0 6px;color:var(--dim)}
-.ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
-.ivseg{display:flex;border:1px solid var(--ln);border-radius:5px;overflow:hidden;max-width:100%;overflow-x:auto}
-.ivseg button,.ivseg input{background:var(--p1);border:0;border-right:1px solid var(--ln);border-radius:0;padding:4px 9px;font-size:12.5px;color:var(--dim)}
-.ivseg button{cursor:pointer}.ivseg button.on{background:var(--acbg);color:var(--ac);font-weight:600}.ivseg input{width:64px;text-align:center;color:var(--tx);border-right:0}
-.ivseg .set{background:var(--ac);color:#fff;border-right:0}
-details.adv{margin-top:8px}details summary{cursor:pointer;color:var(--dim);font-size:12.5px}
-.hint{color:var(--am);font-size:12.5px;margin-top:8px}.boot{color:var(--am);font-size:12.5px;margin-bottom:6px}
-.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
-.filters input[type=text]{flex:1 1 220px}
-.cats{display:flex;border:1px solid var(--ln);border-radius:5px;overflow:hidden;flex-wrap:wrap}
-.cats button{background:var(--p1);border:0;border-right:1px solid var(--ln);padding:4px 10px;cursor:pointer;color:var(--dim);font-size:12.5px}
-.cats button:last-child{border-right:0}.cats button.on{background:var(--p3);color:var(--tx);font-weight:600}
-.tw{overflow-x:auto;background:var(--p1);border:1px solid var(--ln);border-radius:6px}
-table.dl{width:100%;border-collapse:collapse;font-size:13px}
-table.dl th{text-align:left;font-weight:600;color:var(--dim);font-size:12px;padding:7px 10px;border-bottom:1px solid var(--ln);background:var(--p2);white-space:nowrap}
-table.dl td{padding:7px 10px;border-bottom:1px solid var(--p3);white-space:nowrap;vertical-align:middle}
-table.dl tbody tr{cursor:pointer}table.dl tbody tr:hover{background:var(--p2)}table.dl tr:last-child td{border-bottom:0}
-table.dl td.val{font-family:var(--mono);text-align:right}table.dl th.r{text-align:right}
-table.dl .nm{font-weight:600}table.dl .sub{font-size:12px;color:var(--mut)}
-.ov{position:fixed;inset:0;background:#0006;z-index:50;display:flex;justify-content:flex-end}.ov[hidden]{display:none}
-.pane{width:min(600px,100%);height:100%;background:var(--p1);border-left:1px solid var(--ln);overflow-y:auto;padding:16px 20px}
-.pane h2{margin:0;font-size:17px;font-weight:600}.pane h3{font-size:12.5px;margin:18px 0 6px;color:var(--dim);font-weight:600}
-.vt{width:100%;border-collapse:collapse;font-size:13.5px}.vt td{padding:6px 4px;border-bottom:1px solid var(--p3);vertical-align:top}
-.vt td:first-child{color:var(--dim);width:50%}.vt td.v{font-family:var(--mono);word-break:break-word}.vt td.v small{color:var(--dim)}
-.vt tr.dg td{font-size:12.5px;color:var(--mut)}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:12.5px}.kv span:nth-child(odd){color:var(--dim)}
-.hex{font-family:var(--mono);font-size:11px;word-break:break-all;color:var(--dim);background:var(--p2);border:1px solid var(--ln);border-radius:4px;padding:7px;line-height:1.55}
-.frm{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}.frm input{flex:1 1 200px}
-.abar{display:flex;height:8px;border-radius:2px;overflow:hidden;background:var(--p3);margin:8px 0}.abar i{display:block;height:100%}
-.leg{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--dim)}.leg span::before{content:"";display:inline-block;width:8px;height:8px;margin-right:5px;background:var(--c)}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;background:var(--ln);margin-top:12px;border:1px solid var(--ln);border-radius:5px;overflow:hidden}
-.st{padding:7px 11px;background:var(--p2)}.st .l{font-size:12px;color:var(--dim)}.st .v{font-family:var(--mono);font-size:14px}
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
-.opts{display:flex;flex-direction:column;gap:8px}.opts .d{font-size:12px;color:var(--mut);margin:-5px 0 0 22px}
-.chgrid{display:flex;flex-wrap:wrap;gap:4px 12px;margin:2px 0 0 22px;font-size:12.5px}
-table.log{width:100%;border-collapse:collapse;font-size:12.5px}table.log th{color:var(--dim);text-align:left;font-weight:600;padding:5px 6px;border-bottom:1px solid var(--ln)}
-table.log td{padding:4px 6px;border-bottom:1px solid var(--p3);white-space:nowrap}table.log td.hex2{white-space:normal;font-family:var(--mono);font-size:11px;color:var(--dim);word-break:break-all}
-footer{color:var(--mut);font-size:12px;text-align:center;padding:18px}
-@media (max-width:820px){.top{padding:8px 12px}nav.tabs{padding:0 12px}main{padding:12px}.cols{grid-template-columns:1fr}
- .chips .chip.opt,table.dl .hm{display:none}input,select{font-size:16px}.pane{padding:12px}}
-</style></head><body>
-<header>
- <div class="top">
-  <div class="brand"><b>ObiUnlocked</b><span id="gwname"></span></div>
-  <div class="chips" id="chips"></div><div class="sp"></div>
-  <div class="tools">
-   <div class="seg"><button id="lde">DE</button><button id="len">EN</button></div>
-   <a class="btn" href="/history" id="t_hist"><span class="lb"></span></a>
-   <a class="btn" href="/radio" id="t_radio"><span class="lb"></span></a>
-   <a class="btn" href="/settings" id="t_set"><span class="lb"></span></a>
-   <a class="btn" href="/debug" id="t_dbg"><span class="lb"></span></a>
-   <button class="btn" id="t_reboot"><span class="lb"></span></button>
-   <button class="btn" id="t_logout" hidden><span class="lb"></span></button>
-  </div>
- </div>
- <nav class="tabs"><a href="#strom" data-t="strom"></a><a href="#funk" data-t="funk"></a><a href="#empfang" data-t="empfang"></a></nav>
-</header>
+<link rel="stylesheet" href="/app.css"></head><body data-own-status="1"><script src="/app.js"></script>
 <main>
 <section id="s_strom">
  <div class="bar"><button class="btn pri" id="pair_btn"></button><span class="dim" id="pair_st"></span><span class="sp"></span>
   <label class="ck" id="hideunb_w"><input type="checkbox" id="hideunb_cb"><span id="hideunb_lbl"></span></label><span class="dim" id="hideunb_badge"></span></div>
  <div class="readers" id="list"></div>
 </section>
+<section id="s_meine" hidden>
+ <div class="bar"><h2 class="sec" id="meine_t" style="margin:0"></h2><span class="sp"></span><a class="btn" href="#funk" id="meine_add"></a></div>
+ <div class="fav" id="favs"></div>
+ <div class="card empty" id="favs_empty" hidden></div>
+</section>
 <section id="s_funk" hidden>
  <div class="filters"><input type="text" id="q"><div class="cats" id="cats"></div>
-  <label class="ck"><input type="checkbox" id="onlysel"><span id="onlysel_l"></span></label>
+  <label class="ck"><input type="checkbox" id="onlysel"><span id="onlysel_l"></span></label><label class="ck"><input type="checkbox" id="hideweak"><span id="hideweak_l"></span></label>
   <select id="sort"></select></div>
  <div class="tw"><table class="dl"><thead><tr id="dl_h"></tr></thead><tbody id="devs"></tbody></table></div>
  <div class="card empty" id="devs_empty" hidden></div>
@@ -137,6 +33,7 @@ footer{color:var(--mut);font-size:12px;text-align:center;padding:18px}
  <div class="card" style="margin-top:14px"><div class="bar"><b id="log_t"></b><span class="sp"></span><button class="btn sm" id="lpause"></button><button class="btn sm" id="lclear"></button></div>
   <div style="overflow-x:auto"><table class="log"><thead><tr id="log_h"></tr></thead><tbody id="logb"></tbody></table></div></div>
 </section>
+<section id="s_hilfe" hidden><div class="card doc" id="doc"></div></section>
 <footer id="ft"></footer>
 </main>
 <div class="ov" id="ov" hidden><div class="pane" id="pane"></div></div>
@@ -165,10 +62,10 @@ const T={de:{
  heapwarn:'⚠ Firmware (%s) ist größer als der freie zusammenhängende Speicher (%s) – Flashen schlägt vermutlich fehl.\n\nBTHome/MQTT abschalten, neu starten, erneut flashen.',
  uptime:'Laufzeit',heap:'Speicher frei',histfs:'Rohdaten',dailyfs:'Tageswerte',
  search:'Suchen: Name, ID, Hersteller, Typ …',all:'Alle',cmeter:'Zähler',chca:'Heizkosten',csmoke:'Rauchmelder',cwx:'Wetter',clw:'LoRaWAN',cother:'Sonstige',
- onlysel:'nur an HA gesendete',srt:'Sortieren: Signal',sage:'Sortieren: zuletzt gesehen',sname:'Sortieren: Name',
+ onlyfav:'nur Meine Geräte',hideweak:'schwache ausblenden',add:'Hinzufügen',added:'Hinzugefügt',addLong:'Zu „Meine Geräte“ hinzufügen',remove:'Aus „Meine Geräte“ entfernen',favnote:'Nur Geräte aus „Meine Geräte“ werden per MQTT an Home Assistant gesendet.',weakS:'schwach',weakInfo:'Empfang zu schwach: %n Telegramme mit Übertragungsfehlern (zuletzt %r dBm, vor %a). Gerätekopf ist korrekt, Messwerte kommen erst bei besserem Empfang – Gateway höher bzw. näher aufstellen.',meine:'Meine Geräte',addMore:'Geräte hinzufügen',details:'Details',noData:'noch keine Daten',seenAgo:'vor',favEmpty:'Noch keine Geräte hinzugefügt. Unter <a href="#funk">In der Nähe</a> siehst du alles, was das Gateway empfängt – mit „Hinzufügen“ landet ein Gerät hier, und nur diese Geräte werden per MQTT an Home Assistant gesendet.',srt:'Sortieren: Signal',sage:'Sortieren: zuletzt gesehen',sname:'Sortieren: Name',
  hDev:'Gerät',hMfr:'Hersteller',hVal:'Wert',hSig:'Signal',hSeen:'Zuletzt',hStat:'Daten',nodev:'Noch keine Funkgeräte empfangen. Heizkostenverteiler senden alle paar Minuten, Rauchmelder teils nur wenige Male am Tag.',
  tooHA:'An Home Assistant / MQTT senden',keyS:'Schlüssel',paired:'gekoppelt',enc:'verschlüsselt',keyok:'entschlüsselt',plain:'unverschlüsselt',nokey:'Schlüssel fehlt',badkey:'falscher Schlüssel',unsup:'nicht unterstützt',
- funknote:'Schalter = Gerät wird per MQTT an <b>&lt;base&gt;/wmbus|weather|lorawan/…</b> gesendet und erscheint in Home Assistant. Verschlüsselte Zähler brauchen den <b>AES-Schlüssel</b> vom Messdienst (Minol, Zenner, Techem, ista …). LoRaWAN-Nutzdaten nur mit den Session-Keys des eigenen Geräts.',
+ funknote:'<b>Hinzufügen</b> übernimmt ein Gerät in „Meine Geräte“; nur diese werden per MQTT (<b>&lt;base&gt;/wmbus|weather|lorawan/…</b>) an Home Assistant gesendet. Verschlüsselte Zähler brauchen den <b>AES-Schlüssel</b> vom Messdienst (Minol, Zenner, Techem, ista …). LoRaWAN-Nutzdaten nur mit den Session-Keys des eigenen Geräts.',
  values:'Messwerte',tech:'Technik',raw:'Rohdaten',name:'Name',save:'Speichern',key:'AES-Schlüssel (32 Hex-Zeichen)',keyset:'Schlüssel setzen',keydel:'Schlüssel löschen',
  lwkeys:'Session-Keys (z. B. aus der TTN-Konsole)',forget:'Gerät vergessen',forgetq:'Gerät vergessen? Es erscheint beim nächsten Empfang neu (ohne Name/Schlüssel).',
  novals:'Keine Messwerte.',novalsEnc:'Das Gerät sendet verschlüsselt. Mit dem AES-Schlüssel siehst du alle Werte im Klartext.',novalsBad:'Der Schlüssel passt nicht (Prüfbytes fehlen).',
@@ -200,7 +97,7 @@ Object.assign(T.en,T.de,{hist:'History',radio:'OBI radio',set:'Settings',dbg:'De
  samever:'The reader already runs v%v – the same version is not reflashed.\n\nTry anyway?',
  heapwarn:'⚠ Firmware (%s) is larger than the free contiguous memory (%s) – flashing will likely fail.\n\nDisable BTHome/MQTT, reboot, flash again.',
  uptime:'uptime',heap:'free heap',histfs:'raw data',dailyfs:'daily values',search:'Search: name, ID, manufacturer, type …',all:'All',cmeter:'Meters',chca:'Heat cost',
- csmoke:'Smoke detectors',cwx:'Weather',cother:'Other',onlysel:'sent to HA only',srt:'Sort: signal',sage:'Sort: last seen',sname:'Sort: name',
+ csmoke:'Smoke detectors',cwx:'Weather',cother:'Other',onlyfav:'my devices only',hideweak:'hide weak',add:'Add',added:'Added',addLong:'Add to “My devices”',remove:'Remove from “My devices”',favnote:'Only devices in “My devices” are sent to Home Assistant via MQTT.',weakS:'weak',weakInfo:'Reception too weak: %n telegrams with transmission errors (last %r dBm, %a ago). The header is fine, readings arrive once reception improves – place the gateway higher or closer.',meine:'My devices',addMore:'Add devices',details:'Details',noData:'no data yet',seenAgo:'',favEmpty:'No devices added yet. <a href="#funk">Nearby</a> lists everything the gateway receives – “Add” puts a device here, and only these are sent to Home Assistant via MQTT.',srt:'Sort: signal',sage:'Sort: last seen',sname:'Sort: name',
  hDev:'Device',hMfr:'Manufacturer',hVal:'Value',hSig:'Signal',hSeen:'Last seen',hStat:'Data',nodev:'No radio devices yet. Heat cost allocators send every few minutes, smoke detectors sometimes only a few times a day.',tooHA:'Send to Home Assistant / MQTT',keyS:'key',paired:'paired',
  enc:'encrypted',keyok:'decrypted',plain:'unencrypted',nokey:'key missing',badkey:'wrong key',unsup:'unsupported',values:'Readings',tech:'Technical',raw:'Raw data',
  name:'Name',save:'Save',key:'AES key (32 hex digits)',keyset:'Set key',keydel:'Delete key',lwkeys:'Session keys (e.g. from the TTN console)',forget:'Forget device',
@@ -217,35 +114,24 @@ const age=s=>s==null?'–':s<60?s+' s':s<3600?Math.floor(s/60)+' min':s<86400?(s
 const kb=n=>n==null?'?':Math.round(n/1024)+' KB';
 const dur=s=>{const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return (d?d+'d ':'')+(h?h+'h ':'')+m+'m'};
 /* ---------------- tabs + language ---------------- */
-let tab=(location.hash||'#strom').slice(1);if(!['strom','funk','empfang'].includes(tab))tab='strom';
-function showTab(t){tab=t;$$('nav.tabs a').forEach(a=>a.classList.toggle('on',a.dataset.t===t));['strom','funk','empfang'].forEach(x=>$('#s_'+x).hidden=x!==t);
- if(t!=='strom')loadUnl();if(t==='empfang')pollLog();}
+const TABS=['strom','meine','funk','empfang','hilfe'];
+let tab=(location.hash||'#strom').slice(1);if(!TABS.includes(tab))tab='strom';
+function showTab(t){if(!TABS.includes(t))t='strom';tab=t;window.appNav&&window.appNav(t);TABS.forEach(x=>$('#s_'+x).hidden=x!==t);
+ if(t==='meine')loadFav();else if(t!=='strom'&&t!=='hilfe')loadUnl();if(t==='empfang')pollLog();if(t==='hilfe')drawDoc();window.scrollTo(0,0);}
 window.addEventListener('hashchange',()=>showTab(location.hash.slice(1)||'strom'));
-function applyLang(){L=T[lang];document.documentElement.lang=lang;$('#lde').className=lang=='de'?'on':'';$('#len').className=lang=='en'?'on':'';
- [['#t_hist','hist'],['#t_radio','radio'],['#t_set','set'],['#t_dbg','dbg'],['#t_reboot','reboot'],['#t_logout','logout']].forEach(([s,k])=>$(s+' .lb').textContent=L[k]);
- $('[data-t=strom]').innerHTML=L.tstrom+'<span class="n" id="n_strom"></span>';$('[data-t=funk]').innerHTML=L.tfunk+'<span class="n" id="n_funk"></span>';$('[data-t=empfang]').textContent=L.tempf;
- $('#pair_btn').textContent=L.pairall;$('#hideunb_lbl').textContent=L.hideUnb;$('#q').placeholder=L.search;$('#onlysel_l').textContent=L.onlysel;
+function applyLang(){L=T[lang];document.documentElement.lang=lang;
+ $('#pair_btn').textContent=L.pairall;$('#hideunb_lbl').textContent=L.hideUnb;$('#q').placeholder=L.search;$('#onlysel_l').textContent=L.onlyfav;$('#hideweak_l').textContent=L.hideweak;
  $('#sort').innerHTML=[['rssi',L.srt],['age',L.sage],['name',L.sname]].map(([v,t])=>`<option value="${v}">${t}</option>`).join('');$('#sort').value=sortBy;
  $('#funk_note').innerHTML=L.funknote;$('#air_t').textContent=L.air;$('#st_reset').textContent=L.stReset;$('#cfg_t').textContent=L.cfg;$('#win_l').textContent=L.win;
  $('#avh_l').textContent=L.avh;$('#c_save').textContent=L.save;$('#how').innerHTML=L.how;$('#log_t').textContent=L.logt;$('#lpause').textContent=logPaused?L.resume:L.pause;
- $('#lclear').textContent=L.clear;$('#log_h').innerHTML=L.lh.map(h=>`<th>${h}</th>`).join('');cfgDrawn=false;renderCats();}
-$('#lde').onclick=()=>{lang='de';localStorage.setItem('lang',lang);applyLang();tick();renderUnl();};
-$('#len').onclick=()=>{lang='en';localStorage.setItem('lang',lang);applyLang();tick();renderUnl();};
-$('#t_reboot').onclick=()=>{if(confirm(L.rebootq))post('/api/reboot').catch(()=>{});};
-$('#t_logout').onclick=async()=>{await post('/api/logout').catch(()=>{});location.href='/login';};
+ $('#lclear').textContent=L.clear;$('#log_h').innerHTML=L.lh.map(h=>`<th>${h}</th>`).join('');$('#meine_t').textContent=L.meine;$('#meine_add').textContent=L.addMore;
+ cfgDrawn=false;renderCats();}
 /* ---------------- OBI readers (status + cards) ---------------- */
+const openAdv=new Set();
 let lastStatus=null,_rs=[],editId=null,uploading=false,_hideUnbound=false,_revealTmp=false,_pairActive=false;
 async function tick(){try{
  const st=await(await fetch('/api/status')).json(),rs=await(await fetch('/api/readers')).json();_rs=rs;lastStatus=st;numFmt=st.num_fmt||0;
- $('#t_logout').hidden=!(st.auth&&st.auth.enabled);
- $('#gwname').textContent=st.gw_custom_name||('Gateway '+(st.gw||st.gwid||'').toUpperCase());
- const q=st.mqtt||{};
- const chips=[[st.wifi?'on':'off',L.wifi,st.wifi?`${st.ip} · ${st.wifi_rssi} dBm`:L.off],
-  [!q.enabled?'':q.connected?'on':'off','MQTT',!q.enabled?L.dis:q.connected?`${q.pub_count} ${L.msgs}`:q.state],
-  ['on','OBI',`${st.freq_mhz} MHz · SF${st.sf}`,'opt']];
- if(st.temp_c!=null)chips.push(['','',st.temp_c+' °C','opt']);
- $('#chips').innerHTML=chips.map(c=>`<span class="chip ${c[3]||''}"><span class="dot ${c[0]}"></span>${c[1]?'<b>'+c[1]+'</b>':''}<span class="dim">${esc(c[2])}</span></span>`).join('');
- $('#n_strom')&&($('#n_strom').textContent=rs.length);
+ window.appStatus&&window.appStatus(st);
  $('#pair_st').textContent=st.pair_remaining_s>0?L.pairon.replace('%s',st.pair_remaining_s):L.pairoff;
  _hideUnbound=!!st.hide_unbound;_pairActive=st.pair_remaining_s>0;
  const cb=$('#hideunb_cb');if(document.activeElement!==cb)cb.checked=_hideUnbound;
@@ -254,7 +140,7 @@ async function tick(){try{
  const hf=st.hist_fs;
  $('#ft').textContent=`${L.uptime} ${dur(st.uptime_s)} · ${L.heap} ${kb(st.max_alloc_heap)}`+(st.fw?` · ObiUnlocked ${st.fw.version} (${st.fw.target})`:'')+
   (hf&&hf.ok?` · ${L.histfs} ${kb(hf.total-hf.used)}/${kb(hf.total)} · ${L.dailyfs} ${kb(hf.daily_total-hf.daily_used)}/${kb(hf.daily_total)}`:'')+` · ${st.gwid_ascii||''} ${st.mac||''}`;
- const ae=document.activeElement,busy=editId!==null||(ae&&/^(iv_|fw_)/.test(ae.id||''));
+ const ae=document.activeElement,busy=editId!==null||(ae&&/^(iv_|fw_)/.test(ae.id||''))||$$('#list input[type=file]').some(i=>i.files.length);
  if(!busy&&!uploading)drawReaders();
  if(st.ota&&st.ota.active){const el=$('#op_'+st.ota.target);if(el){const o=st.ota,at=o.pos!=null?o.pos:o.served,p=o.size?Math.min(100,Math.round(at/o.size*100)):0;
   el.textContent=L.otarun+' '+p+'%'+(o.pass>1?' · '+L.otapass.replace('%n',o.pass):'')+(o.pass>2?' — '+L.otaloop:'');}}
@@ -289,7 +175,7 @@ function card(r){const nm=r.name?esc(r.name):'',ed=editId===r.id,id=r.id;
  <div class="uuid">${r.uuid?'UUID '+r.uuid:L.uuidwait}</div>${r.bootloader?`<div class="boot">${L.boot}</div>`:''}
  <div class="tiles">${tilesHtml(r)}</div>${ed?`<div class="ctl"><button class="btn sm" data-act="breset" data-rid="${id}">${L.reset}</button></div>`:''}
  ${r.assigned?`<div class="ctl"><div class="ivseg">${iv.map(q=>`<button class="${r.interval==q[1]?'on':''}" data-act="ivq" data-rid="${id}" data-s="${q[1]}">${q[0]}</button>`).join('')}<input type="number" id="iv_${id}" placeholder="${L.sec}" min="1" max="9999" value="${r.interval||''}"><button class="set" id="setb_${id}" hidden data-act="iv" data-rid="${id}">${L.setiv}</button></div></div>
-  <details class="adv"><summary>${L.adv}</summary><div class="ctl"><input type="file" id="fw_${id}" accept=".bin" style="flex:1 1 220px"><button class="btn" data-act="ota" data-rid="${id}" data-cur="${r.softver||0}">${L.flash}</button><span class="dim" id="op_${id}"></span></div></details>`
+  <details class="adv" data-rid="${id}" ${openAdv.has(id)?'open':''}><summary>${L.adv}</summary><div class="ctl"><input type="file" id="fw_${id}" accept=".bin" style="flex:1 1 220px"><button class="btn" data-act="ota" data-rid="${id}" data-cur="${r.softver||0}">${L.flash}</button><span class="dim" id="op_${id}"></span></div></details>`
  :`<div class="ctl"><button class="btn pri" data-act="bind" data-rid="${id}">${L.bind}</button><span class="dim">${L.pendhint}</span></div>`}
  ${r.assigned&&!r.has_data&&!r.bootloader?`<div class="hint">${L.irhint}</div>`:''}</div>`;}
 async function saveBox(id,cfg){for(let i=0;i<3;i++){try{const r=await post('/api/boxcfg?id='+id+'&cfg='+encodeURIComponent(cfg));if(r.ok)return;}catch(e){}await new Promise(s=>setTimeout(s,500));}alert(L.boxerr);}
@@ -315,6 +201,7 @@ list.addEventListener('click',async e=>{const b=e.target.closest('[data-act]');i
  else if(a==='iv'){const v=$('#iv_'+id).value;if(v){await post('/api/interval?id='+id+'&seconds='+v);tick();}}
  else if(a==='bind'){await post('/api/assign?id='+id+'&on=1');tick();}
  else if(a==='ota')doOta(id,+b.dataset.cur);});
+list.addEventListener('toggle',e=>{const d=e.target;if(d.matches&&d.matches('details.adv'))d.open?openAdv.add(d.dataset.rid):openAdv.delete(d.dataset.rid);},true);
 list.addEventListener('input',e=>{const m=/^iv_(.+)/.exec(e.target.id);if(m)$('#setb_'+m[1]).hidden=false;});
 list.addEventListener('keydown',e=>{const t=e.target;if(/^iv_/.test(t.id)&&e.key==='Enter')$('#setb_'+t.id.slice(3)).click();
  if(/^nm_/.test(t.id)){if(e.key==='Enter')toggleEdit(t.id.slice(3));else if(e.key==='Escape'){editId=null;drawReaders();}}});
@@ -342,22 +229,37 @@ function sig(r){const n=r>=-80?4:r>=-90?3:r>=-100?2:r>=-110?1:0;return`<span cla
 function title(d){if(d.name)return d.name;if(d.t==='wm')return d.tname+' '+d.id;if(d.t==='wx')return d.proto+(d.ch?' K'+d.ch:'');return d.join?'Join '+d.k.slice(1):'LoRaWAN '+d.k;}
 function kind(d){if(d.t==='wm')return d.tname+' · '+d.id+' · '+d.mode;if(d.t==='wx')return d.k+(d.exp?' · '+L.xp:'');return d.mtype+' · SF'+d.sf+' · '+d.freq+' MHz';}
 function sub(d){if(d.t==='wm')return(d.mfrn||d.mfr)+' · '+(d.name?d.tname+' · ':'')+d.id+' · '+d.mode;if(d.t==='wx')return d.k+(d.exp?' · '+L.xp:'');return d.mtype+' · SF'+d.sf+' · '+d.freq+' MHz';}
-function badge(d){if(d.t==='wm'){const x=DECT[d.dec];return x?`<span class="tag ${x[1]}">${L[x[0]]}</span>`:'';}if(d.t==='lw')return d.keys?`<span class="tag ${d.main=='Schlüssel falsch'?'bad':'ok'}">${L.keyS}</span>`:'';return d.exp?`<span class="tag warn">${L.xp}</span>`:'';}
+const weak=d=>d.t==='wm'&&d.err&&!d.count;
+const seen=d=>d.age??d.eage;
+function badge(d){if(weak(d))return`<span class="tag warn">${L.weakS} · ${d.err}×</span>`;if(d.t==='wm'){const x=DECT[d.dec];return x?`<span class="tag ${x[1]}">${L[x[0]]}</span>`:'';}if(d.t==='lw')return d.keys?`<span class="tag ${d.main=='Schlüssel falsch'?'bad':'ok'}">${L.keyS}</span>`:'';return d.exp?`<span class="tag warn">${L.xp}</span>`:'';}
 function renderUnl(){if(!U)return;renderCats();$('#n_funk')&&($('#n_funk').textContent=U.wm.length+U.wx.length+U.lw.length);
- const q=$('#q').value.trim().toLowerCase(),only=$('#onlysel').checked;
- let L2=allDevs().filter(d=>(cat==='all'||catOf(d)===cat)&&(!only||d.sel)&&(!q||[d.k,d.name,d.tname,d.mfr,d.mfrn,d.proto,d.main].join(' ').toLowerCase().includes(q)));
- const cmp={rssi:(a,b)=>(b.rssi||-999)-(a.rssi||-999),age:(a,b)=>(a.age??1e9)-(b.age??1e9),name:(a,b)=>title(a).localeCompare(title(b))}[sortBy];
+ const q=$('#q').value.trim().toLowerCase(),only=$('#onlysel').checked,hw=$('#hideweak').checked;
+ let L2=allDevs().filter(d=>(cat==='all'||catOf(d)===cat)&&(!only||d.sel)&&(!hw||!weak(d))&&(!q||[d.k,d.name,d.tname,d.mfr,d.mfrn,d.proto,d.main].join(' ').toLowerCase().includes(q)));
+ const cmp={rssi:(a,b)=>(b.rssi||-999)-(a.rssi||-999),age:(a,b)=>(seen(a)??1e9)-(seen(b)??1e9),name:(a,b)=>title(a).localeCompare(title(b))}[sortBy];
  L2.sort((a,b)=>(b.sel-a.sel)||cmp(a,b));
- $('#dl_h').innerHTML=`<th>HA</th><th>${L.hDev}</th><th class="hm">${L.hMfr}</th><th class="r">${L.hVal}</th><th class="hm">${L.hSig}</th><th>${L.hSeen}</th><th class="hm">${L.hStat}</th>`;
- $('#devs').innerHTML=L2.map(d=>{const m=d.main||'',mut=!m||/^(verschlüsselt|FCnt|Join|Schlüssel)/.test(m);
-  return`<tr data-t="${d.t}" data-k="${d.k}"><td><input type="checkbox" data-sel="1" title="${L.tooHA}" ${d.sel?'checked':''}></td>
+ $('#dl_h').innerHTML=`<th></th><th>${L.hDev}</th><th class="hm">${L.hMfr}</th><th class="r">${L.hVal}</th><th class="hm">${L.hSig}</th><th>${L.hSeen}</th><th class="hm">${L.hStat}</th>`;
+ $('#devs').innerHTML=L2.map(d=>{const m=d.main||'',mut=!m||/^(verschlüsselt|FCnt|Join|Schlüssel|Empfang)/.test(m);
+  return`<tr data-t="${d.t}" data-k="${d.k}"><td>${d.sel?`<span class="tag ok">${L.added}</span>`:`<button class="btn sm" data-add="1">${L.add}</button>`}</td>
   <td><div class="nm">${esc(title(d))}</div><div class="sub">${esc(kind(d))}</div></td><td class="hm">${esc(d.t==='wm'?(d.mfrn||d.mfr):d.t==='wx'?d.proto.split(' ')[0]:'LoRaWAN')}</td>
-  <td class="val${mut?' mut':''}">${esc(m||'–')}</td><td class="hm">${d.rssi} dBm</td><td>${age(d.age)}</td><td class="hm">${badge(d)}</td></tr>`;}).join('');
+  <td class="val${mut?' mut':''}">${esc(m||'–')}</td><td class="hm">${weak(d)?d.erssi:d.rssi} dBm</td><td class="age">${age(seen(d))}</td><td class="hm">${badge(d)}</td></tr>`;}).join('');
  $('#devs_empty').hidden=U.wm.length+U.wx.length+U.lw.length>0;$('#devs_empty').textContent=L.nodev;}
 $('#devs').addEventListener('click',async e=>{const c=e.target.closest('tr[data-k]');if(!c)return;
- if(e.target.dataset.sel!==undefined){{await post('/api/unl/dev',{t:c.dataset.t,k:c.dataset.k,sel:e.target.checked?1:0});loadUnl();}return;}
+ if(e.target.dataset.add){e.target.disabled=true;await post('/api/unl/dev',{t:c.dataset.t,k:c.dataset.k,sel:1});loadUnl();return;}
  openDetail(c.dataset.t,c.dataset.k);});
 async function loadUnl(){try{U=await(await fetch('/api/unl')).json();renderUnl();renderEmpfang();if(openDev&&!paneBusy())openDetail(openDev.t,openDev.k,true);}catch(e){}}
+/* ---------------- my devices ---------------- */
+let F=null;
+async function loadFav(){try{F=await(await fetch('/api/unl/fav')).json();renderFav();if(openDev&&!paneBusy())openDetail(openDev.t,openDev.k,true);}catch(e){}}
+function bigVal(v){if(!v)return'';return typeof v.v==='number'?esc(nf(v.v))+(v.u?'<small>'+esc(v.u)+'</small>':''):fmtVal(v.v,v.u);}
+const MAINK=['volume','energy','hca','temperature','head_status','status'];
+function renderFav(){if(!F)return;$('#favs_empty').hidden=F.length>0;$('#favs_empty').innerHTML=L.favEmpty;
+ $('#favs').innerHTML=F.map(x=>{const d={...x.dev,t:x.t},vals=x.vals.filter(v=>!v.d),main=MAINK.map(k=>vals.find(v=>v.k===k)).find(Boolean);
+  const rest=vals.filter(v=>v!==main);
+  return`<div class="fc"><div class="hd"><div style="flex:1;min-width:0"><div class="nm">${esc(title(d))}</div><div class="sub">${esc(sub(d))}</div></div><button class="btn sm" data-open="${d.t}|${d.k}">${L.details}</button></div>
+  ${main?`<div><div class="dim" style="font-size:12px">${esc(main.l)}</div><div class="big">${bigVal(main)}</div></div>`:`<div class="big mut">${esc(d.main||L.noData)}</div>`}
+  ${rest.length?`<table>${rest.map(v=>`<tr><td>${esc(v.l)}</td><td>${fmtVal(v.v,v.u)}</td></tr>`).join('')}</table>`:''}
+  <div class="ft"><span>${weak(d)?d.erssi:d.rssi} dBm</span><span>${L.seenAgo} ${age(seen(d))}</span><span class="sp"></span>${badge(d)}</div></div>`;}).join('');}
+$('#favs').addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(!b)return;const[t,k]=b.dataset.open.split('|');openDetail(t,k);});
 /* ---------------- detail pane ---------------- */
 const paneBusy=()=>$('#pane').contains(document.activeElement)&&/INPUT|SELECT/.test(document.activeElement.tagName);
 function closeDetail(){openDev=null;$('#ov').hidden=true;}
@@ -375,9 +277,10 @@ async function openDetail(t,k,refresh){openDev={t,k};let x;try{x=await(await fet
    ['Verschlüsselung',d.sec?'AES Mode '+d.sec:'keine'],['Status',d.stxt+' (0x'+d.status.toString(16).padStart(2,'0')+')'],['Decoder',x.decoder||'OMS / DIF-VIF']]
   :t==='wx'?[['Protokoll',d.proto],['ID',d.id],['Kanal',d.ch]]
   :[['Typ',d.mtype],[d.join?'DevEUI':'DevAddr',d.k.replace(/^J/,'')],['Frame-Zähler',d.fcnt],['Port',d.fport??'–'],['Nutzdaten',d.plen+' Byte'],['SNR',d.snr+' dB'],['Kanal',d.freq+' MHz · SF'+d.sf]];
- tech.push(['RSSI',d.rssi+' dBm'],['Zuletzt',age(d.age)],['Empfangen',d.count+'×']);
+ tech.push(['RSSI',d.rssi+' dBm'],['Zuletzt',age(seen(d))],['Empfangen',d.count+'×']);if(t==='wm')tech.push(['Fehlerhaft (CRC)',(d.err||0)+'×']);
  $('#pane').innerHTML=`<div class="bar" style="margin:0"><div style="flex:1;min-width:0"><h2>${esc(title(d))}</h2><div class="dim" style="font-size:12.5px">${esc(sub(d))}</div></div><button class="btn" id="pclose">${L.close}</button></div>
- <div class="bar" style="margin:12px 0 0"><label class="ck"><input type="checkbox" id="psel" ${d.sel?'checked':''}>${L.tooHA}</label><span class="sp"></span>${badge(d)}</div>
+ <div class="bar" style="margin:12px 0 0"><button class="btn ${d.sel?'':'pri'}" id="psel">${d.sel?L.remove:L.addLong}</button><span class="sp"></span>${badge(d)}</div><div class="note">${L.favnote}</div>
+ ${weak(d)||d.err?`<div class="note" style="margin-top:8px;color:var(--am)">${L.weakInfo.replace('%n',d.err).replace('%r',d.erssi).replace('%a',age(d.eage))}</div>`:''}
  <h3>${L.values}</h3>${main.length?`<table class="vt">${main.map(v=>`<tr><td>${esc(v.l)}</td><td class="v">${fmtVal(v.v,v.u)}</td></tr>`).join('')}</table>`:`<div class="note">${empty}</div>`}
  <h3>${L.name}</h3><div class="frm" style="margin:0"><input id="pname" maxlength="24" value="${esc(d.name)}" placeholder="${esc(title({...d,name:''}))}"><button class="btn" id="pnsave">${L.save}</button></div>
  ${t==='wm'?`<h3>${L.key}</h3><div class="frm" style="margin:0"><input id="pkey" class="mono" placeholder="${d.key?'••••••••••••••••••••••••••••••••':'00112233445566778899AABBCCDDEEFF'}" maxlength="47" autocomplete="off"><button class="btn pri" id="pkset">${L.keyset}</button>${d.key?`<button class="btn bad" id="pkdel">${L.keydel}</button>`:''}</div>`:''}
@@ -387,8 +290,8 @@ async function openDetail(t,k,refresh){openDev={t,k};let x;try{x=await(await fet
  ${x.frame||x.phy?`<details><summary class="dim" style="cursor:pointer;margin-top:12px">${L.raw}</summary><div class="hex" style="margin-top:8px">${fmtHex(x.frame||x.phy)}</div>${x.plain?`<div class="hex" style="margin-top:6px;color:var(--ac)">${fmtHex(x.plain)}</div>`:''}</details>`:''}
  <div class="frm" style="margin-top:22px"><button class="btn bad" id="pforget">${L.forget}</button></div>`;
  $('#ov').hidden=false;
- const set=async b=>{const r=await post('/api/unl/dev',{t,k,...b});if(!r.ok){try{alert((await r.json()).err||'Fehler');}catch(e){alert('Fehler');}}loadUnl();};
- $('#pclose').onclick=closeDetail;$('#psel').onchange=e=>set({sel:e.target.checked?1:0});
+ const set=async b=>{const r=await post('/api/unl/dev',{t,k,...b});if(!r.ok){try{alert((await r.json()).err||'Fehler');}catch(e){alert('Fehler');}}if(tab==='meine')loadFav();else loadUnl();};
+ $('#pclose').onclick=closeDetail;$('#psel').onclick=()=>set({sel:d.sel?0:1}).then(()=>openDetail(t,k));
  $('#pnsave').onclick=()=>set({name:$('#pname').value});
  if($('#pkset'))$('#pkset').onclick=()=>{const v=$('#pkey').value.trim();if(!/^[0-9a-fA-F:\s-]{32,47}$/.test(v))return alert(L.key);set({key:v});};
  if($('#pkdel'))$('#pkdel').onclick=()=>set({key:''});
@@ -424,7 +327,59 @@ async function pollLog(){if(logPaused||tab!=='empfang')return;try{const r=await(
  if(r.e.length)logRows=logRows.concat(r.e).slice(-300);logSince=r.seq;renderLog();}catch(e){}}
 $('#lpause').onclick=()=>{logPaused=!logPaused;$('#lpause').textContent=logPaused?L.resume:L.pause;};
 $('#lclear').onclick=()=>{logRows=[];renderLog();};
+/* ---------------- help ---------------- */
+const DOC=`<h2>ObiUnlocked – Kurzanleitung</h2>
+<p>Das Gateway hat einen Funkchip (SX1262) für 868 MHz. Es betreibt den <b>OBI-Lesekopf</b> am Stromzähler. In den Funkpausen hört es andere Geräte in der Umgebung mit: Heizkostenverteiler, Wasser- und Wärmezähler, Rauchmelder (wireless M-Bus), Wettersensoren und LoRaWAN-Geräte. Gesendet wird dabei nichts, nur für den OBI-Lesekopf.</p>
+<h2>Bereiche</h2>
+<table><tr><th>Stromzähler</th><td>Zeigt die OBI-Leseköpfe mit Bezug, Einspeisung, Leistung und Batterie.<ul><li>„Alle Lesegeräte binden“ nimmt 3 Minuten lang neue Leseköpfe automatisch an.</li><li>„Bearbeiten“: Namen vergeben und Kacheln anordnen (ziehen, ein- und ausblenden).</li><li>Das Intervall legt fest, wie oft der Lesekopf sendet.</li><li>„Lesekopf-Firmware über LoRa flashen“ spielt eine neue Lesekopf-Firmware ein. Die Version muss im Dateinamen stehen, z. B. <code>reader_v55.bin</code>.</li></ul></td></tr>
+<tr><th>Meine Geräte</th><td>Deine ausgewählten Funkgeräte mit allen Werten. <b>Nur diese</b> werden per MQTT an Home Assistant gesendet.</td></tr>
+<tr><th>In der Nähe</th><td>Alles, was das Gateway empfängt, auch Geräte der Nachbarn. „Hinzufügen“ übernimmt ein Gerät in „Meine Geräte“. Ein Klick auf eine Zeile öffnet die Details.</td></tr>
+<tr><th>Empfang</th><td>Welche Funkarten das Gateway hört, wie sich die Funkzeit aufteilt, Statistik und Live-Log.</td></tr>
+<tr><th>Verlauf</th><td>Tagesverbrauch und Kosten des Stromzählers, CSV-Export.</td></tr>
+<tr><th>OBI-Funk</th><td>Live-Ansicht aller LoRa-Pakete zwischen Gateway und Lesekopf, für die Fehlersuche.</td></tr>
+<tr><th>Einstellungen</th><td>WLAN, MQTT, Login, Zeitzone, Firmware-Update, Werksreset.</td></tr></table>
+<h2>Werte verstehen</h2>
+<ul><li><b>Zählerstand</b>: aktueller Stand. Wasser und Gas in m³, Wärme in kWh.</li>
+<li><b>Stichtag</b> und <b>Stand am Stichtag</b>: Der Messdienst rechnet einmal im Jahr ab, meist zum 31.12. Manche Geräte speichern zusätzlich einen Monatsstichtag.</li>
+<li><b>Verbrauch seit Stichtag</b>: Zählerstand minus Stand am Stichtag. Das ist dein Verbrauch im laufenden Abrechnungsjahr.</li>
+<li><b>Verbrauchseinheiten</b> (Heizkostenverteiler): Das ist keine Energie, sondern ein Rechenwert. Was er in Heizkosten bedeutet, ergibt sich erst mit dem Umrechnungsfaktor aus der Abrechnung.</li>
+<li><b>Status</b>: z. B. „OK“, „Batterie schwach“ oder „Dauerhafter Fehler“, direkt vom Gerät gemeldet.</li>
+<li><b>Rauchmelder</b>: letzter Alarm, Anzahl der Alarme, Demontagen und letzter Druck auf den Testknopf. Bauart Ei Electronics zeigt zusätzlich:<ul><li>Verschmutzung von 0 bis 31, ab 28 reinigen</li><li>Batteriespannung</li><li>Melderstatus</li></ul></li></ul>
+<h2>Verschlüsselte Geräte</h2>
+<p>Viele Messdienste (Minol, Zenner, Techem, ista …) senden AES-verschlüsselt. Ohne Schlüssel siehst du Hersteller, ID, Typ, Signal und Status.</p>
+<ul><li><b>Mit Schlüssel</b> siehst du alle Werte. Den AES-Schlüssel (32 Hex-Zeichen) trägst du im Detailfenster des Geräts ein.</li>
+<li><b>Woher:</b> vom Messdienst, oder über Vermieter bzw. Hausverwaltung. Gib dazu die Geräte-ID aus der Liste an.</li>
+<li>„Falscher Schlüssel“ heißt: Der Schlüssel gehört nicht zu diesem Gerät.</li></ul>
+<p>LoRaWAN-Geräte sind ebenfalls verschlüsselt. Für eigene Geräte trägst du NwkSKey und AppSKey ein, z. B. aus der TTN-Konsole unter „Session information“. Sendet das Gerät im Format Cayenne LPP, erscheinen die Daten danach als Messwerte.</p>
+<h2>„Empfang zu schwach“</h2>
+<p>Das Gateway hat das Gerät gehört, aber mit Übertragungsfehlern (CRC-Fehler). Hersteller, ID und Typ stimmen trotzdem, weil der Gerätekopf eine eigene Prüfsumme hat. Die Messwerte dagegen sind unbrauchbar.</p>
+<p>So bekommst du besseren Empfang:</p>
+<ul><li>Gateway höher und freier aufstellen, nicht hinter Metall oder Beton. Rauchmelder hängen an der Decke.</li>
+<li>Unter „Empfang“ weniger Funkarten aktivieren. Dann ist wM-Bus öfter an der Reihe.</li></ul>
+<p>Ab etwa −105 dBm klappt der Empfang meist zuverlässig.</p>
+<h2>Funkzeit</h2>
+<p>Der Funkchip hört immer nur eine Funkart. Jede Sekunde läuft so ab:</p>
+<ul><li>OBI-Beacon, danach 300 ms Hörfenster für den Lesekopf.</li>
+<li>Im Rest der Sekunde hört ein anderer Empfänger: wM-Bus T1/C1 jede zweite Sekunde, die übrigen Funkarten abwechselnd.</li></ul>
+<p>In diesen Situationen bleibt der Chip komplett beim OBI-Lesekopf:</p>
+<ul><li>beim Koppeln und beim Lesekopf-Update</li>
+<li>während „Alle binden“</li>
+<li>in den ersten 2 Minuten nach dem Start</li>
+<li>rund um jeden fälligen Zählerstand</li></ul>
+<p>Fehlen OBI-Werte, erhöhe unter „Empfang“ das Hörfenster oder schalte Empfänger ab.</p>
+<h2>Home Assistant</h2>
+<p>MQTT richtest du unter Einstellungen ein. Jedes Gerät aus „Meine Geräte“ erscheint dann automatisch als eigenes Gerät in Home Assistant. Das nutzt MQTT-Discovery und braucht Home Assistant 2024.11 oder neuer.</p>
+<ul><li><b>Topics:</b> <code>&lt;base&gt;/wmbus/&lt;Hersteller&gt;&lt;ID&gt;</code>, <code>&lt;base&gt;/weather/…</code> und <code>&lt;base&gt;/lorawan/…</code>, jeweils mit <code>/status</code> (online/offline).</li>
+<li><b>Entfernen:</b> Nimmst du ein Gerät aus „Meine Geräte“ heraus, verschwindet es auch aus Home Assistant.</li>
+<li><b>Energie-Dashboard:</b> Wasser-, Gas- und Wärmezähler lassen sich dort direkt verwenden.</li></ul>
+<h2>Hilfe bei Problemen</h2>
+<ul><li><b>Gerät taucht nicht auf:</b> Manche Geräte, z. B. Rauchmelder, senden nur wenige Male am Tag. Prüfe den Live-Log unter „Empfang“.</li>
+<li><b>Viele CRC-Fehler im Live-Log:</b> Der Empfang ist zu schwach, siehe oben.</li>
+<li><b>Lesekopf meldet keine Werte:</b> Taste am Lesekopf kurz drücken, das startet die Infrarot-Lesung. Hilft das nicht, das Hörfenster erhöhen.</li>
+<li><b>Gateway nicht erreichbar:</b> Fehlt das WLAN, erscheint der Hotspot <code>ObiUnlocked-XXXXXX</code>. Gehäusetaste 5 Sekunden halten setzt das Gateway auf Werkseinstellungen zurück.</li></ul>
+`;
+let docDrawn=false;function drawDoc(){if(docDrawn)return;docDrawn=true;$('#doc').innerHTML=DOC;}
 /* ---------------- start ---------------- */
 applyLang();showTab(tab);tick();loadUnl();
-setInterval(tick,2000);setInterval(()=>{if(!document.hidden&&tab!=='strom')loadUnl();},4000);setInterval(pollLog,1500);
+setInterval(tick,2000);setInterval(()=>{if(document.hidden)return;if(tab==='meine')loadFav();else if(tab==='funk'||tab==='empfang')loadUnl();},4000);setInterval(pollLog,1500);
 </script></body></html>
