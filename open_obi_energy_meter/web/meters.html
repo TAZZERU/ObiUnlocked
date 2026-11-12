@@ -1,0 +1,147 @@
+<!doctype html><html lang=de><head><meta charset=utf-8><link rel=icon href=/favicon.svg>
+<meta name=viewport content='width=device-width,initial-scale=1'><title>ObiUnlocked — Funkgeräte</title><style>
+:root{--bg:#0a0e14;--panel:#141a23;--line:#232e3c;--txt:#eaf0f7;--dim:#7d8da0;--acc:#4fd6c2;--warn:#f0a63c;--bad:#ef6b6b;--ok:#62d26f;--mono:ui-monospace,Menlo,Consolas,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,sans-serif;font-size:14px}
+header{display:flex;gap:12px;align-items:center;padding:11px 16px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2;flex-wrap:wrap}
+header b{font-size:15px}header a{color:var(--acc);text-decoration:none;font-size:13px}.sp{flex:1}
+button,select,input{background:#1b2430;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:13px;font-family:inherit}
+button{cursor:pointer}button.on,button.pri{background:var(--acc);border-color:var(--acc);color:#052018;font-weight:700}
+button.bad{border-color:var(--bad);color:var(--bad)}
+.wrap{padding:12px 16px;max-width:1300px;margin:0 auto}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.bar{display:flex;height:12px;border-radius:6px;overflow:hidden;background:#0f141b;margin:6px 0}
+.bar i{display:block;height:100%}.leg{display:flex;gap:14px;flex-wrap:wrap;color:var(--dim);font-size:12px}
+.leg span:before{content:'';display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;background:var(--c)}
+.stats{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--dim);margin-top:6px}.stats b{color:var(--txt);font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{color:var(--dim);text-align:left;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:6px 8px;border-bottom:1px solid #172030;white-space:nowrap}
+tbody tr{cursor:pointer}tbody tr:hover{background:#111823}tr.open{background:#122030}
+.mono{font-family:var(--mono)}.dim{color:var(--dim)}.hl{color:var(--acc)}
+.badge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;border:1px solid var(--line);color:var(--dim)}
+.badge.ok{color:var(--ok);border-color:#2f5f36}.badge.warn{color:var(--warn);border-color:#6b4c1d}.badge.bad{color:var(--bad);border-color:#6b2a2a}
+.det td{cursor:default;background:#0d131b;white-space:normal}
+.det .grid{display:grid;grid-template-columns:minmax(260px,1fr) minmax(260px,1fr);gap:14px}
+.det table td,.det table th{padding:3px 8px;font-size:12.5px}
+.hex{font-family:var(--mono);font-size:11px;word-break:break-all;color:var(--dim);line-height:1.5}
+label{display:flex;gap:8px;align-items:center;margin:6px 0}
+.form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}.form input{flex:1 1 200px}
+.note{color:var(--dim);font-size:12px;line-height:1.5}.note b{color:var(--txt)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.sel{width:18px;height:18px;accent-color:var(--acc)}
+.tw{overflow-x:auto}
+@media (max-width:760px){.det .grid{grid-template-columns:1fr}.wrap{padding:10px}header{gap:8px}input,select{font-size:16px}.hide-m{display:none}}
+</style></head><body>
+<header><b>📟 Funkgeräte</b><span class=dim id=hdr></span><span class=sp></span><a href="/radio">📡 OBI-Radio</a><a href="/">← Dashboard</a></header>
+<div class=wrap>
+<div class=card>
+ <div class=dim style="font-size:12px">Funkzeit-Aufteilung des SX1262 seit Start / Reset</div>
+ <div class=bar id=bar></div>
+ <div class=leg><span style="--c:var(--acc)" id=lg0>OBI</span><span style="--c:#8b7cf6" id=lg1>wM-Bus</span><span style="--c:var(--warn)" id=lg2>LoRaWAN</span></div>
+ <div class=stats id=stats></div>
+</div>
+<div class=tabs><button data-t=wm class=on>wM-Bus</button><button data-t=lw>LoRaWAN</button><button data-t=log>Live-Log</button><button data-t=cfg>Einstellungen</button></div>
+
+<section id=t-wm>
+ <div class=toolbar><input id=fw placeholder="Filter: Hersteller, ID, Name, Typ" style="flex:1 1 220px"><label><input type=checkbox id=onlySel class=sel> nur ausgewählte</label>
+ <select id=sortw><option value=rssi>nach RSSI</option><option value=age>nach zuletzt gesehen</option><option value=count>nach Telegrammen</option><option value=id>nach ID</option></select></div>
+ <div class="card tw" style="padding:4px"><table><thead><tr><th title="An MQTT / Home Assistant senden">HA</th><th>Name / ID</th><th>Hersteller</th><th>Typ</th><th class=hide-m>Modus</th><th>RSSI</th><th>zuletzt</th><th class=hide-m>Telegr.</th><th>Daten</th></tr></thead><tbody id=wmb></tbody></table>
+ <div class="note" id=wmempty style="padding:14px">Noch keine wM-Bus-Telegramme empfangen. Heizkostenverteiler senden meist alle paar Minuten, Rauchmelder teils nur wenige Male am Tag.</div></div>
+ <p class=note>Häkchen setzen = Gerät wird per MQTT an <b>&lt;base&gt;/wmbus/&lt;ID&gt;</b> veröffentlicht und erscheint in Home Assistant (MQTT-Discovery). Verschlüsselte Geräte (Minol, Zenner, Techem, ista … senden meist AES-128) brauchen den <b>AES-Schlüssel</b> des Geräts – den bekommst du vom Messdienst bzw. Vermieter (Recht auf die Verbrauchsdaten, EED / HKVO). Ohne Schlüssel siehst du ID, Typ, RSSI und Status.</p>
+</section>
+
+<section id=t-lw hidden>
+ <div class="card tw" style="padding:4px"><table><thead><tr><th>HA</th><th>DevAddr / DevEUI</th><th>Typ</th><th>FCnt</th><th class=hide-m>FPort</th><th>RSSI</th><th class=hide-m>SNR</th><th class=hide-m>Kanal</th><th>zuletzt</th><th class=hide-m>Pakete</th></tr></thead><tbody id=lwb></tbody></table>
+ <div class=note id=lwempty style="padding:14px">Noch nichts empfangen. LoRaWAN-Empfang muss in den Einstellungen aktiviert sein; es wird immer nur <b>ein</b> Kanal mit <b>einem</b> Spreading-Factor abgehört.</div></div>
+ <p class=note>LoRaWAN-Nutzdaten sind mit den Session-Keys des jeweiligen Netzes (TTN, Helium, Betreiber …) verschlüsselt – sichtbar sind nur DevAddr, Frame-Zähler, Port, Länge und Signalqualität; bei Join-Requests die DevEUI. Für eigene Geräte reicht das z. B. als „lebt noch / Empfangsqualität“-Sensor.</p>
+</section>
+
+<section id=t-log hidden>
+ <div class=toolbar><button id=lpause>⏸ Pause</button><button onclick="logRows=[];renderLog()">Leeren</button><span class=dim id=lstat></span></div>
+ <div class="card tw" style="padding:4px"><table><thead><tr><th>Alter</th><th>Funk</th><th>Gerät</th><th>RSSI</th><th>Länge</th><th>Bytes (gekürzt)</th></tr></thead><tbody id=logb></tbody></table></div>
+</section>
+
+<section id=t-cfg hidden>
+ <div class=card>
+  <label><input type=checkbox id=c_obi class=sel> <span><b>OBI-Gateway</b> (Beacon + OBI-Lesekopf am Stromzähler) – hat immer Vorrang</span></label>
+  <label><input type=checkbox id=c_wmb class=sel> <span><b>wireless M-Bus</b> T1/C1, 868,95 MHz (Heizkostenverteiler, Rauchmelder, Wasser-/Wärmezähler)</span></label>
+  <label><input type=checkbox id=c_lw class=sel> <span><b>LoRaWAN-Monitor</b> (nur Metadaten)</span></label>
+  <div class=form><span class=dim>LoRaWAN-Kanal</span><select id=c_lwf>
+   <option value=868100>868,1 MHz</option><option value=868300>868,3 MHz</option><option value=868500>868,5 MHz</option>
+   <option value=867100>867,1 MHz</option><option value=867300>867,3 MHz</option><option value=867500>867,5 MHz</option>
+   <option value=867700>867,7 MHz</option><option value=867900>867,9 MHz</option><option value=869525>869,525 MHz</option></select>
+   <select id=c_lwsf><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option></select><span class=dim>SF</span></div>
+  <div class=form><span class=dim>OBI-Hörfenster nach jedem Beacon</span><input id=c_win type=number min=100 max=900 step=10 style="flex:0 0 100px"><span class=dim>ms</span></div>
+  <div class=form><span class=dim>Gerät in HA „nicht verfügbar“ nach</span><input id=c_avh type=number min=1 max=720 style="flex:0 0 90px"><span class=dim>Stunden ohne Telegramm</span></div>
+  <div class=form><button class=pri id=csave>Speichern</button><button id=sreset>Statistik zurücksetzen</button><span id=cmsg class=dim></span></div>
+ </div>
+ <div class="card note">
+  <b>So teilt sich der Funkchip auf:</b> Der SX1262 kann nur eine Modulation gleichzeitig hören. Jede Sekunde sendet das Gateway zuerst den OBI-Beacon und hört danach das eingestellte Fenster lang auf LoRa (verlängert sich automatisch, solange OBI-Pakete kommen). Erst danach wird für den Rest der Sekunde auf wM-Bus bzw. LoRaWAN umgeschaltet, ~30 ms vor dem nächsten Beacon zurück.<br>
+  Während Kopplung, Reader-OTA, dem Kopplungsfenster, den ersten 2 Minuten nach dem Start und rund um jeden fälligen Energie-Report eines Lesekopfs bleibt das Funkmodul komplett auf OBI.<br>
+  <b>Max. OBI-Versatz</b> (oben) zeigt, wie spät nach dem Beacon OBI-Pakete bisher kamen – liegt er nahe am Hörfenster, das Fenster erhöhen. Fehlen OBI-Werte, als Test wM-Bus/LoRaWAN kurz abschalten.
+ </div>
+</section>
+</div>
+<script>
+const $=i=>document.getElementById(i);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtB=b=>b?b.replace(/(..)/g,'$1 ').trim():'';
+const age=s=>s==null?'–':s<60?s+' s':s<3600?Math.floor(s/60)+' min':s<86400?(s/3600).toFixed(1)+' h':(s/86400).toFixed(1)+' d';
+const DEC={plain:['unverschl.','ok'],decrypted:['entschlüsselt','ok'],no_key:['Key fehlt','warn'],wrong_key:['falscher Key','bad'],unsupported:['nicht unterstützt','warn'],malformed:['fehlerhaft','bad'],'':['–','']};
+let data=null,openK=null,openDet=null,tab='wm',logRows=[],logSince=0,logPaused=false,cfgLoaded=false;
+async function api(u,body){const o=body?{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(body)}:{};
+ const r=await fetch(u,o);if(!r.ok)throw new Error((await r.text())||r.status);return r.json();}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
+ ['wm','lw','log','cfg'].forEach(t=>$('t-'+t).hidden=t!==tab);if(tab==='log')pollLog();});
+function renderTop(){const s=data.stats,ms=s.ms,t=Math.max(1,ms[0]+ms[1]+ms[2]);const c=['var(--acc)','#8b7cf6','var(--warn)'];
+ $('bar').innerHTML=ms.map((v,i)=>`<i style="width:${(100*v/t).toFixed(2)}%;background:${c[i]}"></i>`).join('');
+ ['OBI','wM-Bus','LoRaWAN'].forEach((n,i)=>$('lg'+i).textContent=`${n} ${(100*ms[i]/t).toFixed(1)} %`);
+ $('stats').innerHTML=`<span>wM-Bus Telegramme <b>${s.wm_ok}</b> ok · <b>${s.wm_crc}</b> CRC-Fehler</span><span>LoRaWAN <b>${s.lw_ok}</b></span>`+
+ `<span>OBI-Pakete <b>${s.obi_frames}</b>, Versatz zuletzt <b>${s.obi_last_off}</b> / max <b>${s.obi_max_off}</b> ms</span>`+
+ `<span>Umschaltungen <b>${s.switches}</b>${s.switch_err?` (<b style="color:var(--bad)">${s.switch_err} Fehler</b>)`:''}</span>${s.qdrop?`<span>verworfen <b>${s.qdrop}</b></span>`:''}`;
+ $('hdr').textContent=`${data.wm.length} wM-Bus · ${data.lw.length} LoRaWAN`;}
+function wmRow(d){const dec=DEC[d.dec]||[d.dec,''];const nm=d.name?`<b>${esc(d.name)}</b><div class="dim mono" style="font-size:11px">${d.id}</div>`:`<span class=mono>${d.id}</span>`;
+ return `<tr data-k="${d.k}" class="${openK===d.k?'open':''}"><td><input type=checkbox class=sel data-sel="${d.k}" ${d.sel?'checked':''}></td><td>${nm}</td><td class=mono>${d.mfr}</td><td>${esc(d.tname)}</td><td class="hide-m mono">${d.mode}</td><td>${d.rssi||'–'}</td><td>${age(d.age)}</td><td class=hide-m>${d.count}</td><td><span class="badge ${dec[1]}">${dec[0]}</span>${d.key?' 🔑':''}</td></tr>`+
+ (openK===d.k?`<tr class=det><td colspan=9 id=detc>${detHtml(d)}</td></tr>`:'');}
+function detHtml(d){const x=openDet&&openDet.dev.k===d.k?openDet:null;
+ let recs=x?(x.rec.length?`<table><thead><tr><th>Wert</th><th></th><th>Schlüssel (MQTT)</th></tr></thead><tbody>${x.rec.map(r=>`<tr><td>${esc(r.l)}</td><td class=mono><b>${esc(typeof r.v==='number'?r.v.toLocaleString('de-DE',{maximumFractionDigits:6}):r.v)}</b> ${esc(r.u)}</td><td class="mono dim">${esc(r.k)}</td></tr>`).join('')}</tbody></table>`
+  :`<div class=note>${d.dec==='no_key'?'Telegramm ist verschlüsselt (Security Mode '+d.sec+') – AES-Schlüssel eintragen, um Werte zu sehen.':d.dec==='wrong_key'?'Der eingetragene Schlüssel passt nicht (Prüfbytes 2F2F fehlen).':(d.ci>=0xA0&&d.ci<=0xB7)?'Herstellerspezifisches Telegramm (CI 0x'+d.ci.toString(16)+') – nur Rohdaten.':'Keine auswertbaren Datensätze.'}</div>`):'<div class=dim>lade …</div>';
+ return `<div class=grid><div>${recs}</div><div>
+ <div class=note>Hersteller <b>${d.mfr}</b> · ID <b class=mono>${d.id}</b> · Version ${d.ver} · Typ 0x${d.type.toString(16).padStart(2,'0')} (${esc(d.tname)}) · CI 0x${d.ci.toString(16)} · Security Mode ${d.sec} · Status 0x${d.status.toString(16).padStart(2,'0')} · ${d.count} Telegramme</div>
+ ${x?`<div class=dim style="margin-top:8px;font-size:12px">Telegramm (ohne CRC)</div><div class=hex>${fmtB(x.frame)}</div>${x.plain?`<div class=dim style="margin-top:6px;font-size:12px">entschlüsselt</div><div class=hex style="color:var(--acc)">${fmtB(x.plain)}</div>`:''}`:''}
+ <div class=form><input id=dname placeholder="Name (z. B. HKV Wohnzimmer)" value="${esc(d.name)}" maxlength=24><button data-act=name>Name speichern</button></div>
+ <div class=form><input id=dkey class=mono placeholder="AES-128-Schlüssel, 32 Hex-Zeichen" maxlength=47 autocomplete=off><button data-act=key>${d.key?'Key ersetzen':'Key setzen'}</button>${d.key?'<button data-act=delkey class=bad>Key löschen</button>':''}</div>
+ <div class=form><button data-act=forget class=bad>Gerät vergessen</button></div></div></div>`;}
+function renderWm(){const f=$('fw').value.trim().toLowerCase(),only=$('onlySel').checked,so=$('sortw').value;
+ let L=data.wm.filter(d=>(!only||d.sel)&&(!f||[d.k,d.name,d.tname,d.mfr].join(' ').toLowerCase().includes(f)));
+ const cmp={rssi:(a,b)=>(b.rssi||-999)-(a.rssi||-999),age:(a,b)=>(a.age??1e9)-(b.age??1e9),count:(a,b)=>b.count-a.count,id:(a,b)=>a.k.localeCompare(b.k)}[so];
+ L.sort((a,b)=>(b.sel-a.sel)||cmp(a,b));$('wmb').innerHTML=L.map(wmRow).join('');$('wmempty').hidden=data.wm.length>0;}
+function renderLw(){$('lwb').innerHTML=data.lw.slice().sort((a,b)=>(b.sel-a.sel)||((a.age??1e9)-(b.age??1e9))).map(d=>`<tr data-lk="${d.k}"><td><input type=checkbox class=sel data-lsel="${d.k}" ${d.sel?'checked':''}></td><td><span class=mono>${d.k}</span>${d.name?' <b>'+esc(d.name)+'</b>':''}</td><td>${d.mtype}</td><td>${d.fcnt}</td><td class=hide-m>${d.fport??'–'}</td><td>${d.rssi}</td><td class=hide-m>${d.snr}</td><td class=hide-m>${d.freq} SF${d.sf}</td><td>${age(d.age)}</td><td class=hide-m>${d.count}</td></tr>`).join('');$('lwempty').hidden=data.lw.length>0;}
+function renderCfg(){if(cfgLoaded)return;cfgLoaded=true;const c=data.cfg;$('c_obi').checked=c.obi;$('c_wmb').checked=c.wmb;$('c_lw').checked=c.lw;$('c_win').value=c.win;$('c_lwf').value=c.lwf;$('c_lwsf').value=c.lwsf;$('c_avh').value=c.avh;}
+async function load(){try{data=await api('/api/unl');renderTop();const dc=$('detc');if(!(dc&&dc.contains(document.activeElement)))renderWm();renderLw();renderCfg();
+ if(openK){const d=data.wm.find(x=>x.k===openK);if(d&&(!openDet||openDet.dev.count!==d.count||openDet.dev.key!==d.key))loadDet(openK);}}catch(e){$('hdr').textContent='Fehler: '+e.message;}}
+async function loadDet(k){try{openDet=await api('/api/unl/wm?k='+k);const d=data.wm.find(x=>x.k===k);if(d&&openK===k){const c=$('detc');if(c&&!c.contains(document.activeElement))c.innerHTML=detHtml(d);}}catch(e){}}
+$('wmb').addEventListener('click',async e=>{const t=e.target;
+ if(t.dataset.sel){await api('/api/unl/wm',{k:t.dataset.sel,sel:t.checked?1:0});return load();}
+ if(t.dataset.act){const k=openK;let b={k};if(t.dataset.act==='name')b.name=$('dname').value;
+  if(t.dataset.act==='key'){b.key=$('dkey').value.trim();if(!/^[0-9a-fA-F:\s-]{32,47}$/.test(b.key))return alert('Schlüssel: 32 Hex-Zeichen');}
+  if(t.dataset.act==='delkey'){if(!confirm('Schlüssel wirklich löschen?'))return;b.key='';}
+  if(t.dataset.act==='forget'){if(!confirm('Gerät vergessen? Es taucht beim nächsten Telegramm wieder (ohne Auswahl/Key/Name) auf.'))return;b.forget=1;openK=null;}
+  try{await api('/api/unl/wm',b);}catch(err){alert(err.message);}openDet=null;await load();if(openK)loadDet(openK);return;}
+ if(t.closest('.det'))return;const tr=t.closest('tr[data-k]');if(!tr)return;openK=openK===tr.dataset.k?null:tr.dataset.k;openDet=null;renderWm();if(openK)loadDet(openK);});
+$('lwb').addEventListener('click',async e=>{const t=e.target;
+ if(t.dataset.lsel){await api('/api/unl/lw',{k:t.dataset.lsel,sel:t.checked?1:0});return load();}
+ const tr=t.closest('tr[data-lk]');if(!tr)return;const n=prompt('Name für '+tr.dataset.lk+' (leer = keiner, „-“ = vergessen):');if(n===null)return;
+ await api('/api/unl/lw',n==='-'?{k:tr.dataset.lk,forget:1}:{k:tr.dataset.lk,name:n});load();});
+['fw','onlySel','sortw'].forEach(i=>$(i).addEventListener('input',renderWm));
+$('csave').onclick=async()=>{try{const r=await api('/api/unl/cfg',{obi:$('c_obi').checked?1:0,wmb:$('c_wmb').checked?1:0,lw:$('c_lw').checked?1:0,win:$('c_win').value,lwf:$('c_lwf').value,lwsf:$('c_lwsf').value,avh:$('c_avh').value});
+ $('cmsg').textContent='gespeichert ✓';cfgLoaded=false;data.cfg=r.cfg;renderCfg();}catch(e){$('cmsg').textContent='Fehler: '+e.message;}};
+$('sreset').onclick=async()=>{await api('/api/unl/stats/reset',{});load();};
+const KN={1:'wM-Bus',2:'LoRaWAN'},MN={1:'T1',2:'C1a',3:'C1b'};
+function renderLog(){const now=logNow;$('logb').innerHTML=logRows.slice(-150).reverse().map(e=>`<tr><td class=dim>${age(Math.round((now-e.t)/1000))}</td><td>${KN[e.kind]||'?'} <span class=dim>${e.kind===1?(MN[e.m]||''):'SF'+e.m}</span></td><td class="${e.r?'':'hl'} mono">${esc(e.who)}</td><td>${e.rssi}</td><td>${e.len}</td><td class=hex>${fmtB(e.b)}${e.len>e.b.length/2?' …':''}</td></tr>`).join('');}
+let logNow=0;async function pollLog(){if(logPaused||tab!=='log')return;try{const r=await api('/api/unl/log?since='+logSince);logNow=r.now;
+ if(r.e.length){logRows=logRows.concat(r.e).slice(-300);}logSince=r.seq;$('lstat').textContent=logRows.length+' Einträge';renderLog();}catch(e){}}
+$('lpause').onclick=()=>{logPaused=!logPaused;$('lpause').textContent=logPaused?'▶ Weiter':'⏸ Pause';$('lpause').classList.toggle('on',logPaused);};
+setInterval(()=>{if(!document.hidden&&tab!=='log')load();},4000);setInterval(pollLog,1500);load();
+</script></body></html>
