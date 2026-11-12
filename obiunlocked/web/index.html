@@ -270,7 +270,11 @@ function fmtVal(v,u){if(typeof v==='number')return esc(nf(v))+(u?' <small>'+esc(
  if(typeof v==='string'&&/^\d{4}-\d\d-\d\d$/.test(v))return esc(new Date(v+'T00:00').toLocaleDateString(loc()));
  if(typeof v==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(v))return esc(new Date(v).toLocaleString(loc(),{dateStyle:'medium',timeStyle:'short'}));return esc(v);}
 async function openDetail(t,k,refresh){openDev={t,k};let x;try{x=await(await fetch('/api/unl/dev?t='+t+'&k='+encodeURIComponent(k))).json();}catch(e){return;}
- if(!openDev||openDev.k!==k)return;const d={...x.dev,t};openData=x;
+ if(!openDev||openDev.k!==k)return;
+ // periodic refresh: only redraw when something changed, and keep open sections + scroll position
+ const sig=JSON.stringify(x);if(refresh&&openData&&openData._k===k&&openData._sig===sig)return;
+ const pane=$('#pane'),keepOpen=new Set([...pane.querySelectorAll('details[data-d]')].filter(e=>e.open).map(e=>e.dataset.d)),keepTop=pane.scrollTop;
+ x._k=k;x._sig=sig;const d={...x.dev,t};openData=x;
  let empty='';if(!x.vals.length){if(t==='wm')empty=x.cached===false?L.novalsCache:d.dec==='no_key'?L.novalsEnc:d.dec==='wrong_key'?L.novalsBad:(d.ci>=0xA0&&d.ci<=0xB7)?L.novalsMfr:L.novals;else if(t==='lw')empty=d.keys?L.novalsBad:L.nolw;else empty=L.novals;}
  const main=x.vals.filter(v=>!v.d),diag=x.vals.filter(v=>v.d);
  const tech=t==='wm'?[['Hersteller',(d.mfrn?d.mfrn+' ':'')+'('+d.mfr+')'],['ID',d.id],['Typ',d.tname+' (0x'+d.type.toString(16).padStart(2,'0')+')'],['Version',d.ver],['Funkmodus',d.mode],['CI','0x'+d.ci.toString(16)],
@@ -285,13 +289,14 @@ async function openDetail(t,k,refresh){openDev={t,k};let x;try{x=await(await fet
  <h3>${L.name}</h3><div class="frm" style="margin:0"><input id="pname" maxlength="24" value="${esc(d.name)}" placeholder="${esc(title({...d,name:''}))}"><button class="btn" id="pnsave">${L.save}</button></div>
  ${t==='wm'?`<h3>${L.key}</h3><div class="frm" style="margin:0"><input id="pkey" class="mono" placeholder="${d.key?'••••••••••••••••••••••••••••••••':'00112233445566778899AABBCCDDEEFF'}" maxlength="47" autocomplete="off"><button class="btn pri" id="pkset">${L.keyset}</button>${d.key?`<button class="btn bad" id="pkdel">${L.keydel}</button>`:''}</div>`:''}
  ${t==='lw'&&!d.join?`<h3>${L.lwkeys}</h3><div class="frm" style="margin:0"><input id="pnwk" class="mono" placeholder="NwkSKey" maxlength="47" autocomplete="off"><input id="papp" class="mono" placeholder="AppSKey" maxlength="47" autocomplete="off"><button class="btn pri" id="plset">${L.keyset}</button>${d.keys?`<button class="btn bad" id="pldel">${L.keydel}</button>`:''}</div>`:''}
- <details><summary class="dim" style="cursor:pointer;margin-top:18px">${L.tech}${diag.length?' · '+diag.length:''}</summary><div class="kv" style="margin-top:10px">${tech.map(([a,b])=>`<span>${a}</span><span class="mono">${esc(b)}</span>`).join('')}</div>
+ <details data-d="tech"><summary class="dim" style="cursor:pointer;margin-top:18px">${L.tech}${diag.length?' · '+diag.length:''}</summary><div class="kv" style="margin-top:10px">${tech.map(([a,b])=>`<span>${a}</span><span class="mono">${esc(b)}</span>`).join('')}</div>
   ${diag.length?`<table class="vt" style="margin-top:10px">${diag.map(v=>`<tr class="dg"><td>${esc(v.l)}</td><td class="v">${fmtVal(v.v,v.u)}</td></tr>`).join('')}</table>`:''}</details>
- ${x.frame||x.phy?`<details><summary class="dim" style="cursor:pointer;margin-top:12px">${L.raw}</summary><div class="hex" style="margin-top:8px">${fmtHex(x.frame||x.phy)}</div>${x.plain?`<div class="hex" style="margin-top:6px;color:var(--ac)">${fmtHex(x.plain)}</div>`:''}</details>`:''}
+ ${x.frame||x.phy?`<details data-d="raw"><summary class="dim" style="cursor:pointer;margin-top:12px">${L.raw}</summary><div class="hex" style="margin-top:8px">${fmtHex(x.frame||x.phy)}</div>${x.plain?`<div class="hex" style="margin-top:6px;color:var(--ac)">${fmtHex(x.plain)}</div>`:''}</details>`:''}
  <div class="frm" style="margin-top:22px"><button class="btn bad" id="pforget">${L.forget}</button></div>`;
+ if(refresh){pane.querySelectorAll('details[data-d]').forEach(e=>{if(keepOpen.has(e.dataset.d))e.open=true;});pane.scrollTop=keepTop;}
  $('#ov').hidden=false;
  const set=async b=>{const r=await post('/api/unl/dev',{t,k,...b});if(!r.ok){try{alert((await r.json()).err||'Fehler');}catch(e){alert('Fehler');}}if(tab==='meine')loadFav();else loadUnl();};
- $('#pclose').onclick=closeDetail;$('#psel').onclick=()=>set({sel:d.sel?0:1}).then(()=>openDetail(t,k));
+ $('#pclose').onclick=closeDetail;$('#psel').onclick=()=>set({sel:d.sel?0:1}).then(()=>openDetail(t,k,true));
  $('#pnsave').onclick=()=>set({name:$('#pname').value});
  if($('#pkset'))$('#pkset').onclick=()=>{const v=$('#pkey').value.trim();if(!/^[0-9a-fA-F:\s-]{32,47}$/.test(v))return alert(L.key);set({key:v});};
  if($('#pkdel'))$('#pkdel').onclick=()=>set({key:''});
