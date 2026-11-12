@@ -27,7 +27,8 @@ Open the gateway's web UI → **Settings → Firmware** and upload `obi_gateway_
 [Releases page](https://github.com/TAZZERU/ObiUnlocked/releases). WiFi, MQTT, paired readers and history are
 kept. A broken image is rejected and the running firmware stays.
 
-To get future updates straight from GitHub, enter `TAZZERU/ObiUnlocked` as the repository in the same place.
+Updates come straight from this repository: **Settings → Firmware → check for updates** (or turn on the
+automatic update schedule there). Forks can enter their own repository instead.
 
 ### Gateway still runs the original OBI / heyOBI firmware
 
@@ -236,8 +237,8 @@ git remote add upstream https://github.com/atc1441/OBI_Energy_Tracker_Local_Clou
 git fetch upstream && git merge upstream/main
 ```
 
-The in-app GitHub updater only looks for releases once you enter a repository under *Settings → Firmware*, for
-example your fork. Otherwise an OpenOBI release would replace ObiUnlocked.
+The in-app updater (and the Home Assistant update entity) look for releases of `TAZZERU/ObiUnlocked` by default.
+Forks change that under *Settings → Firmware*, or at build time with `-D GH_DEFAULT_REPO=\"owner/repo\"`.
 
 ## Credits
 

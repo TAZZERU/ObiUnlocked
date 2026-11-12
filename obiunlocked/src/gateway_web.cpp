@@ -963,7 +963,9 @@ static void handleUpdatePage() { sendGzipHtml(server, UPDATE_HTML_GZ); }
 // ---- GitHub release check + self-update from GitHub -------------------------------------------------
 // The gateway can pull its own newest release .bin straight from GitHub (built by .github/workflows/build.yml,
 // asset named "<board-target>-<tag>.bin"). HTTPS via WiFiClientSecure(setInsecure) — no cert bundle needed.
-#define GH_DEFAULT_REPO "atc1441/OBI_Energy_Tracker_Local_Cloud"
+#ifndef GH_DEFAULT_REPO
+#define GH_DEFAULT_REPO "TAZZERU/ObiUnlocked"   // ObiUnlocked releases; override with -D GH_DEFAULT_REPO=\"owner/repo\"
+#endif
 
 // Accepts "owner/repo" as-is, or strips a full GitHub URL ("https://github.com/owner/repo(.git)") down to it.
 static String ghRepoNorm() {
@@ -1005,12 +1007,6 @@ static bool verNewer(const char *a, const char *b) {
 static bool githubLatest(String &tag, String &url, int *codeOut = nullptr) {
   if (codeOut) *codeOut = 0;
   if (WiFi.status() != WL_CONNECTED) return false;
-#ifdef OBI_UNLOCKED
-  // ObiUnlocked is a fork: the default (upstream) release would replace it with a build that has no wM-Bus /
-  // LoRaWAN support -- both via auto-update and via the HA update entity. Only look up releases when the user
-  // explicitly entered a repository in Settings -> Firmware.
-  if (!g_ghRepo[0]) return false;
-#endif
   WiFiClientSecure cli; cli.setInsecure();
   HTTPClient http; http.setUserAgent("ObiUnlocked");
   http.setConnectTimeout(9000); http.setTimeout(12000);

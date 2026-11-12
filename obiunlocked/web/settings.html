@@ -238,7 +238,7 @@ button:disabled{opacity:.5;cursor:default}
   <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
    <input type=checkbox id=ghauto style="width:auto;margin:0"><span id=lghauto>Automatisches Update (Standard: aus)</span></label>
   <div class=grid>
-   <div><label id=lghrepo>Git-Repo (owner/repo oder GitHub-URL)</label><input id=ghrepo placeholder="atc1441/OBI_Energy_Tracker_Local_Cloud"></div>
+   <div><label id=lghrepo>Git-Repo (owner/repo oder GitHub-URL)</label><input id=ghrepo placeholder="TAZZERU/ObiUnlocked"></div>
    <div><label id=lghivl>Prüfintervall</label>
     <div style="display:flex;gap:6px"><input id=ghivln type=number min=1 value=24 style="flex:1">
      <select id=ghivlu style="flex:1"><option value=1 id=oghH>Stunden</option><option value=24 selected id=oghD>Tage</option></select></div></div>
@@ -369,7 +369,7 @@ async function load(){try{
   if(s.gh_auto&&!ghc){ghc=true;$('ghauto').checked=!!s.gh_auto.enabled;$('ghrepo').value=s.gh_auto.repo||'';
    let h=s.gh_auto.interval_h||24;
    if(h>=24&&h%24===0){$('ghivlu').value=24;$('ghivln').value=h/24;}else{$('ghivlu').value=1;$('ghivln').value=h;}}
-  if(s.gh_auto){$('ghautonote').textContent=s.gh_auto.enabled?t('aktiv — prüft alle ','on — checking every ')+s.gh_auto.interval_h+t(' Std. auf ',' h against ')+(s.gh_auto.repo||'atc1441/OBI_Energy_Tracker_Local_Cloud')+t(' · nächster Check in ',' · next check in ')+fmtDur(s.gh_auto.next_check_s):t('deaktiviert — Firmware ändert sich nur manuell','off — firmware only changes manually');
+  if(s.gh_auto){$('ghautonote').textContent=s.gh_auto.enabled?t('aktiv — prüft alle ','on — checking every ')+s.gh_auto.interval_h+t(' Std. auf ',' h against ')+(s.gh_auto.repo||'TAZZERU/ObiUnlocked')+t(' · nächster Check in ',' · next check in ')+fmtDur(s.gh_auto.next_check_s):t('deaktiviert — Firmware ändert sich nur manuell','off — firmware only changes manually');
    if(s.gh_auto.state===3&&s.gh_auto.last_err)$('ghautonote').textContent+=' · '+t('letzter Versuch fehlgeschlagen: ','last attempt failed: ')+s.gh_auto.last_err;}
   if(s.ftp&&!ftpc){ftpc=true;$('ftpen').checked=!!s.ftp.enabled;$('ftphost').value=s.ftp.host||'';$('ftpport').value=s.ftp.port||21;
    $('ftpuser').value=s.ftp.user||'';$('ftppath').value=s.ftp.path||'';

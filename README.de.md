@@ -28,8 +28,8 @@ Dessen Doku, also Reverse Engineering, eigene Cloud und Flashen des Original-Gat
 Öffne im Browser **Einstellungen → Firmware** und lade `obi_gateway_c3-<version>.bin` von der
 [Release-Seite](https://github.com/TAZZERU/ObiUnlocked/releases) hoch. WLAN, MQTT, gekoppelte Leseköpfe und die
 Historie bleiben erhalten. Ein fehlerhaftes Image weist das Gateway ab, die laufende Firmware bleibt dann
-unverändert. Trägst du an derselben Stelle `TAZZERU/ObiUnlocked` als Repository ein, holt sich das Gateway
-künftige Updates selbst.
+unverändert. Künftige Updates holt sich das Gateway direkt aus diesem Repository: **Einstellungen → Firmware → nach Updates
+suchen**, oder du schaltest dort die automatische Aktualisierung ein.
 
 ### Auf dem Gateway läuft noch die Original-Firmware von OBI
 
@@ -204,8 +204,8 @@ git fetch upstream
 git merge upstream/main
 ```
 
-Die automatische GitHub-Update-Prüfung von OpenOBI ist hier **aus**, solange unter Einstellungen → Firmware kein
-Repository eingetragen ist. Ein OpenOBI-Release würde sonst ObiUnlocked überschreiben.
+Der eingebaute Updater und die Update-Anzeige in Home Assistant prüfen standardmäßig die Releases von
+`TAZZERU/ObiUnlocked`. Ein Fork trägt unter Einstellungen → Firmware sein eigenes Repository ein.
 
 ## Credits
 
