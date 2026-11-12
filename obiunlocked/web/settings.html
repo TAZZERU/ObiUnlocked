@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf-8><link rel=icon href=/favicon.svg>
-<meta name=viewport content='width=device-width,initial-scale=1'><title>Open OBI Energy Tracker — Settings</title><style>
+<meta name=viewport content='width=device-width,initial-scale=1'><title>ObiUnlocked — Settings</title><style>
 :root{--bg:#0a0e14;--panel:#141a23;--panel2:#1b2430;--line:#232e3c;--txt:#eaf0f7;--dim:#7d8da0;--accent:#31d07a;--amber:#e3b341;--red:#f0616d;--mono:ui-monospace,Menlo,Consolas,monospace}
 *{box-sizing:border-box}body{font-family:system-ui,sans-serif;margin:0;background:var(--bg);color:var(--txt)}
 header{display:flex;align-items:center;gap:12px;padding:11px 16px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}
@@ -24,7 +24,7 @@ button:disabled{opacity:.5;cursor:default}
 .upd b{color:var(--accent);font-size:15px}.upd button{margin-top:10px;width:100%;padding:12px;font-size:15px}
 .okrow{color:var(--accent)}code{color:var(--accent);font-family:var(--mono)}
 </style></head><body>
-<header><b>Open OBI Energy Tracker · ⚙ Settings</b><span class=seg><button id=lde onclick="setL('de')">DE</button><button id=len onclick="setL('en')">EN</button></span><a href="/">← Dashboard</a></header>
+<header><b>ObiUnlocked · ⚙ Settings</b><span class=seg><button id=lde onclick="setL('de')">DE</button><button id=len onclick="setL('en')">EN</button></span><a href="/">← Dashboard</a></header>
 <div class=wrap>
 
  <div class=card id=cwifi>
@@ -86,7 +86,7 @@ button:disabled{opacity:.5;cursor:default}
   <h3>🏷 <span id=hgwname>Gateway-Name</span></h3>
   <div class=stat id=gwnstat>…</div>
   <label id=lgwname>Anzeigename (leer = Standard, auch in Home Assistant)</label>
-  <input id=gwname placeholder="OBI Gateway …">
+  <input id=gwname placeholder="ObiUnlocked …">
   <div class=row><button onclick=saveGwName()><span id=bgwname>Speichern</span></button><span class=msg id=gwnmsg></span></div>
  </div>
 
@@ -354,7 +354,7 @@ async function load(){try{
    // this on starts from "what already works" instead of blank fields the user has to look up themselves.
    $('stipip').value=si.on?si.ip:(si.cur_ip||'');$('stipsn').value=si.on?(si.sn||'255.255.255.0'):(si.cur_sn||'255.255.255.0');
    $('stipgw').value=si.on?si.gw:(si.cur_gw||'');$('stipd1').value=si.on?si.dns1:(si.cur_dns1||'');$('stipd2').value=si.on?si.dns2:(si.cur_dns2||'');}
-  { const orig='OBI Gateway '+s.gw;
+  { const orig='ObiUnlocked '+s.gw;
     $('gwnstat').innerHTML=s.gw_custom_name?`${t('aktiv als','active as')} <code>${esc(s.gw_custom_name)}</code> · ${t('original','original')}: <code>${orig}</code>`:`${t('Standardname aktiv','using the default name')}: <code>${orig}</code>`; }
   { const si=s.static_ip||{};
     $('stipstat').innerHTML=(si.on?`<span class="dot on"></span>${t('statisch konfiguriert','static configured')}: <code>${esc(si.ip)}</code>`:`<span class="dot idle"></span>${t('DHCP (automatisch)','DHCP (automatic)')}`)+
@@ -628,7 +628,7 @@ function upload(){let f=$('file').files[0];if(!f){$('upmsg').textContent=t('erst
  x.onerror=()=>{$('upmsg').textContent=t('Verbindung verloren (evtl. Neustart)','connection lost (maybe rebooting)');setTimeout(()=>location.href='/',9000);};
  x.send(fd);}
 async function factoryReset(){
- if(!confirm(t('Wirklich auf Werkseinstellungen zurücksetzen?\n\nWLAN, MQTT, Login, alle gebundenen Reader und der komplette Verlauf werden gelöscht. Das Gerät startet danach im Setup-Portal (WLAN „OpenOBI-…", http://192.168.4.1/).','Really reset to factory settings?\n\nWiFi, MQTT, login, all bound readers and the entire history will be erased. The device then boots into the setup portal (WiFi "OpenOBI-…", http://192.168.4.1/).')))return;
+ if(!confirm(t('Wirklich auf Werkseinstellungen zurücksetzen?\n\nWLAN, MQTT, Login, alle gebundenen Reader und der komplette Verlauf werden gelöscht. Das Gerät startet danach im Setup-Portal (WLAN „ObiUnlocked-…", http://192.168.4.1/).','Really reset to factory settings?\n\nWiFi, MQTT, login, all bound readers and the entire history will be erased. The device then boots into the setup portal (WiFi "ObiUnlocked-…", http://192.168.4.1/).')))return;
  $('frbtn').disabled=true;$('frmsg').textContent=t('setze zurück…','resetting…');
  try{await fetch('/api/factory_reset',{method:'POST'});}catch(e){}
  $('frmsg').textContent=t('zurückgesetzt — Neustart ins Setup-Portal…','reset — rebooting into setup portal…');}

@@ -17,7 +17,7 @@ Back up existing firmware before flashing. Create `bench_secrets.h` beside
 Generate a fresh key, for example with
 `python3 -c 'import secrets; print(secrets.token_hex(16))'`. Use an AP password
 of at least eight characters. Keep the key for your BTHome receiver. Build from
-`open_obi_energy_meter`:
+`obiunlocked`:
 
 ```sh
 pio run -e bthome_c3_bench

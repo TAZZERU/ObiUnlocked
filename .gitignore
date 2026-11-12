@@ -22,3 +22,4 @@ __pycache__/
 *.id2
 *.nam
 *.til
+.DS_Store
