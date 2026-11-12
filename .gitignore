@@ -23,3 +23,5 @@ __pycache__/
 *.nam
 *.til
 .DS_Store
+04-connect-your-own-cloud/tools/obi_gateway_c3-*.bin
+04-connect-your-own-cloud/tools/install_server.log
