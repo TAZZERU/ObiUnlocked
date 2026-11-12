@@ -1,4 +1,4 @@
-// OBI / heyOBI LoRa mini-gateway  —  ESP32 + SX1262 (any board via board_config.h)
+// ObiUnlocked — OBI / heyOBI LoRa gateway + wM-Bus / weather / LoRaWAN receiver, ESP32 + SX1262
 // ---------------------------------------------------------------------------
 // Acts as the reader's gateway so it pairs & ECDH-key-exchanges with US, letting
 // us hold the per-device TEA key and read the energy payload in the clear. Both reader
@@ -55,7 +55,7 @@ uint8_t g_liveSF = OBI_SF_DEFAULT;   // what the radio is ACTUALLY running right
 const uint8_t GWID[6] = { 'O', 'B', 'I', 'E', 'S', 'P' };
 
 // SX1262 plus the one raw command the shared-radio scheduler needs (SetPacketType without RadioLib's full
-// re-init/chip reset, see radioUseObi()/radioUseWmbus() below). getMod() is protected in RadioLib 7.x.
+// re-init/chip reset, see radioUseObi()/radioUseListener() below). getMod() is protected in RadioLib 7.x.
 class SharedSX1262 : public SX1262 {
  public:
   using SX1262::SX1262;
@@ -1245,7 +1245,7 @@ static void handleRx() {
 // The original OBI gateway (OBI_BOARD_OBI_C3) is a sealed enclosure with a single button and a locked
 // bootloader: once custom firmware is delivered over the cloud OTA path there is no UART/JTAG to fix a
 // wrong WiFi/MQTT config. So the button is the escape hatch: hold it >= 5 s to wipe WiFi + MQTT + the
-// stored reader UUIDs and reboot into the 'OpenOBI-<MAC>' captive portal. A short tap (<1 s) reopens
+// stored reader UUIDs and reboot into the 'ObiUnlocked-<MAC>' captive portal. A short tap (<1 s) reopens
 // the setup-AP window (OBI_SETUP_AP_MS) when the AP limit is on (see setup_ap.h).
 // Compiled only when the selected board defines PIN_BUTTON (see board_config.h).
 #ifdef PIN_BUTTON
@@ -1321,10 +1321,10 @@ static void buttonLoop() {
 //
 // The SX1262 can listen to exactly one modulation at a time, but the OBI link only needs it for a small part
 // of every second: the gateway sends its 1 Hz beacon, readers answer on that beacon clock, and the gateway
-// answers them right away. So every 1000 ms period now looks like this:
+// answers them right away. So every 1000 ms period looks like this:
 //
 //   t=0            beacon (LoRa 869.5 MHz) -> OBI listen window (cfg.obiWindowMs, extended while frames flow)
-//   window end     switch to an "aux" listener: wM-Bus T1/C1 (GFSK 868.95 MHz) or LoRaWAN (one channel/SF)
+//   window end     switch to ONE third-party listener (see unl.h); wM-Bus T1/C1 gets every other period
 //   t=1000-guard   back to LoRa, next beacon
 //
 // The OBI link keeps absolute priority -- the radio stays on LoRa for the whole period whenever
@@ -1333,18 +1333,20 @@ static void buttonLoop() {
 //   * a bound reader's energy report is due (from its interval and the last report time).
 // Switching modems is a plain standby + SetPacketType + parameter writes (no chip reset), ~1-2 ms.
 // ===========================================================================================================
-enum RadioMode : uint8_t { RM_OBI = 0, RM_WMBUS = 1, RM_LORAWAN = 2 };
-static RadioMode g_radioMode = RM_OBI;
-static uint32_t  g_modeSinceMs = 0;            // millis() the current mode started (airtime statistics)
-static uint32_t  g_lastBeaconMs = 0;
-static uint32_t  g_auxLwFreqKHz = 0;           // LoRaWAN channel the radio is currently tuned to
-static uint8_t   g_auxLwSf = 0;
+static const uint8_t RM_OBI = 0xFF;            // g_radioMode: RM_OBI or a UnlListener
+static uint8_t  g_radioMode = RM_OBI;
+static uint32_t g_modeSinceMs = 0;             // millis() the current mode started (airtime statistics)
+static uint32_t g_lastBeaconMs = 0;
+static uint32_t g_auxFreqKHz = 0;              // frequency / SF the current listener is tuned to
+static uint8_t  g_auxSf = 0;
 
-#define WMBUS_FREQ_MHZ   868.95f
-#define WMBUS_BITRATE    100.0f                // kbps (T1: 100 kchip/s 3-of-6, C1: 100 kbit/s NRZ)
-#define WMBUS_FREQ_DEV   50.0f                 // kHz
-#define WMBUS_RX_BW      234.3f                // kHz
-#define WMBUS_PKT_LEN    255                   // fixed-length capture; the decoder finds the real frame end
+struct FskListener { float freqMHz, kbps, devKHz, bwKHz; uint8_t sync[2]; uint8_t pktLen, preambleBits; };
+static const FskListener FSK_L[4] = {
+  { 868.95f, 100.0f,   50.0f, 234.3f, { 0x54, 0x3D }, 255, 32 },   // UL_WMB_TC: T1 (3-of-6) + C1 (frame A/B)
+  { 868.30f, 32.768f,  50.0f, 156.2f, { 0x76, 0x96 }, 255, 32 },   // UL_WMB_S1: Manchester chips
+  { 868.30f, 8.06f,    50.0f, 156.2f, { 0x2D, 0xD4 }, 27,  8 },    // UL_WX_BRES: Bresser 5/6/7-in-1
+  { 868.30f, 17.241f,  50.0f, 156.2f, { 0x2D, 0xD4 }, 6,   8 },    // UL_WX_LACR: LaCrosse IT+
+};
 static const uint32_t AUX_GUARD_MS = 30;       // leave the aux slot this long before the next beacon
 static const uint32_t AUX_DEFER_MAX_MS = 25;   // ...unless a frame is mid-air: wait up to this long for it
 static const uint32_t OBI_EXTEND_MS = 150;     // after any OBI frame, keep listening at least this long
@@ -1353,33 +1355,41 @@ static const uint32_t BOOT_OBI_ONLY_MS = 120000;
 #define RL_TRY(expr) do { int16_t _st = (expr); if (_st != RADIOLIB_ERR_NONE && ok) { ok = false; \
     Serial.printf("[radio] %s -> %d\n", #expr, _st); } } while (0)
 
-static void radioSetPacketType(uint8_t type) { radio.setPacketTypeRaw(type); }
-
-static void noteModeChange(RadioMode next) {
+static void noteModeChange(uint8_t next) {
   uint32_t now = millis();
-  unl_note_slot(g_radioMode == RM_OBI ? UNL_SLOT_OBI : g_radioMode == RM_WMBUS ? UNL_SLOT_WMBUS : UNL_SLOT_LORAWAN,
-                now - g_modeSinceMs);
+  unl_note_slot(g_radioMode == RM_OBI ? 0 : 1 + g_radioMode, now - g_modeSinceMs);
   g_modeSinceMs = now;
   g_radioMode = next;
 }
 
-// Back to the reversed OBI LoRa configuration (identical to what setup() applies).
-static bool radioUseObi() {
+static void startAuxReceive() {
+  radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF,
+                     RADIOLIB_IRQ_RX_DEFAULT_FLAGS | (1UL << RADIOLIB_IRQ_SYNC_WORD_VALID), RADIOLIB_IRQ_RX_DEFAULT_MASK, 0);
+}
+
+// LoRa with explicit header + CRC (OBI and LoRaWAN differ only in these parameters).
+static bool radioLora(float mhz, float bw, uint8_t sf, uint8_t sync, uint16_t preamble) {
   bool ok = true;
   radio.standby();
-  radioSetPacketType(RADIOLIB_SX126X_PACKET_TYPE_LORA);
-  RL_TRY(radio.setFrequency(OBI_FREQ_MHZ));
-  RL_TRY(radio.setBandwidth(OBI_BW_KHZ));
-  RL_TRY(radio.setSpreadingFactor(g_liveSF));
+  radio.setPacketTypeRaw(RADIOLIB_SX126X_PACKET_TYPE_LORA);
+  RL_TRY(radio.setFrequency(mhz));
+  RL_TRY(radio.setBandwidth(bw));
+  RL_TRY(radio.setSpreadingFactor(sf));
   RL_TRY(radio.setCodingRate(OBI_CR));
-  RL_TRY(radio.setSyncWord(OBI_SYNCWORD));
-  RL_TRY(radio.setPreambleLength(OBI_PREAMBLE));
+  RL_TRY(radio.setSyncWord(sync));
+  RL_TRY(radio.setPreambleLength(preamble));
   RL_TRY(radio.setCRC(2));
   RL_TRY(radio.explicitHeader());
   RL_TRY(radio.invertIQ(false));
+  RL_TRY(radio.setRxBoostedGainMode(true));
+  return ok;
+}
+
+// Back to the reversed OBI LoRa configuration (identical to what setup() applies).
+static bool radioUseObi() {
+  bool ok = radioLora(OBI_FREQ_MHZ, OBI_BW_KHZ, g_liveSF, OBI_SYNCWORD, OBI_PREAMBLE);
   RL_TRY(radio.setOutputPower(OBI_TXPWR_DBM));
   RL_TRY(radio.setCurrentLimit(140.0));
-  RL_TRY(radio.setRxBoostedGainMode(true));
   radio.startReceive();
   g_rx = false;
   noteModeChange(RM_OBI);
@@ -1387,54 +1397,65 @@ static bool radioUseObi() {
   return ok;
 }
 
-// wireless M-Bus T1 + C1 at once: both use 868.95 MHz / 100 kbps / sync 0x543D; the bytes after the sync
-// word tell them apart (C1 continues with 0x54CD / 0x543D, T1 with 3-of-6 symbols).
-static bool radioUseWmbus() {
+// Next LoRaWAN channel/SF pair from the configured masks (SF11/12 skipped while OBI is on: too long).
+static void nextLorawanTuning(const UnlRadioCfg &cfg, uint32_t &khz, uint8_t &sf) {
+  static uint8_t idx = 0;
+  uint8_t sfMask = cfg.lwSfMask & (cfg.obiOn ? 0x0F : 0x3F);
+  if (!sfMask) sfMask = 1;
+  for (int tries = 0; tries < 64; tries++) {
+    idx = (uint8_t)((idx + 1) & 63);
+    uint8_t ch = idx & 7, s = idx >> 3;
+    if (s < 6 && (cfg.lwChMask >> ch & 1) && (sfMask >> s & 1)) { khz = UNL_LW_CH_KHZ[ch]; sf = (uint8_t)(7 + s); return; }
+  }
+  khz = UNL_LW_CH_KHZ[0]; sf = 7;
+}
+
+static bool radioUseListener(uint8_t l, const UnlRadioCfg &cfg) {
   bool ok = true;
-  radio.standby();
-  radioSetPacketType(RADIOLIB_SX126X_PACKET_TYPE_GFSK);
-  RL_TRY(radio.setFrequency(WMBUS_FREQ_MHZ));
-  RL_TRY(radio.setBitRate(WMBUS_BITRATE));
-  RL_TRY(radio.setFrequencyDeviation(WMBUS_FREQ_DEV));
-  RL_TRY(radio.setRxBandwidth(WMBUS_RX_BW));
-  RL_TRY(radio.setDataShaping(RADIOLIB_SHAPING_NONE));
-  RL_TRY(radio.setEncoding(RADIOLIB_ENCODING_NRZ));
-  RL_TRY(radio.setWhitening(false));
-  RL_TRY(radio.setCRC(0));
-  uint8_t sync[2] = { 0x54, 0x3D };
-  RL_TRY(radio.setSyncWord(sync, 2));
-  RL_TRY(radio.setPreambleLength(32));          // also sets the preamble detector (16 bit, limited by sync)
-  RL_TRY(radio.fixedPacketLengthMode(WMBUS_PKT_LEN));
-  RL_TRY(radio.setRxBoostedGainMode(true));
-  radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF,
-                     RADIOLIB_IRQ_RX_DEFAULT_FLAGS | (1UL << RADIOLIB_IRQ_SYNC_WORD_VALID), RADIOLIB_IRQ_RX_DEFAULT_MASK, 0);
+  if (l == UL_LORAWAN) {
+    uint32_t khz; uint8_t sf;
+    nextLorawanTuning(cfg, khz, sf);
+    ok = radioLora(khz / 1000.0f, 125.0f, sf, 0x34, 8);   // public sync word, uplinks use normal IQ
+    radio.startReceive();
+    g_auxFreqKHz = khz; g_auxSf = sf;
+  } else {
+    const FskListener &f = FSK_L[l];
+    radio.standby();
+    radio.setPacketTypeRaw(RADIOLIB_SX126X_PACKET_TYPE_GFSK);
+    RL_TRY(radio.setFrequency(f.freqMHz));
+    RL_TRY(radio.setBitRate(f.kbps));
+    RL_TRY(radio.setFrequencyDeviation(f.devKHz));
+    RL_TRY(radio.setRxBandwidth(f.bwKHz));
+    RL_TRY(radio.setDataShaping(RADIOLIB_SHAPING_NONE));
+    RL_TRY(radio.setEncoding(RADIOLIB_ENCODING_NRZ));
+    RL_TRY(radio.setWhitening(false));
+    RL_TRY(radio.setCRC(0));
+    RL_TRY(radio.setSyncWord((uint8_t *)f.sync, 2));
+    RL_TRY(radio.setPreambleLength(f.preambleBits));   // also sets the preamble detector (limited by the sync word)
+    RL_TRY(radio.fixedPacketLengthMode(f.pktLen));     // fixed-length capture; the decoders find the real frame end
+    RL_TRY(radio.setRxBoostedGainMode(true));
+    startAuxReceive();
+    g_auxFreqKHz = (uint32_t)(f.freqMHz * 1000 + 0.5f); g_auxSf = 0;
+  }
   g_rx = false;
-  noteModeChange(RM_WMBUS);
+  noteModeChange(l);
   unl_note_switch(ok);
   return ok;
 }
 
-// LoRaWAN uplink sniffer: one EU868 channel + SF, BW125, public sync word 0x34, normal IQ (uplinks only).
-static bool radioUseLorawan(uint32_t freqKHz, uint8_t sf) {
-  bool ok = true;
-  radio.standby();
-  radioSetPacketType(RADIOLIB_SX126X_PACKET_TYPE_LORA);
-  RL_TRY(radio.setFrequency(freqKHz / 1000.0f));
-  RL_TRY(radio.setBandwidth(125.0));
-  RL_TRY(radio.setSpreadingFactor(sf));
-  RL_TRY(radio.setCodingRate(5));
-  RL_TRY(radio.setSyncWord(0x34));
-  RL_TRY(radio.setPreambleLength(8));
-  RL_TRY(radio.setCRC(2));
-  RL_TRY(radio.explicitHeader());
-  RL_TRY(radio.invertIQ(false));
-  RL_TRY(radio.setRxBoostedGainMode(true));
-  radio.startReceive();
-  g_rx = false;
-  g_auxLwFreqKHz = freqKHz; g_auxLwSf = sf;
-  noteModeChange(RM_LORAWAN);
-  unl_note_switch(ok);
-  return ok;
+// Which listener gets this period: T1/C1 every other period (most meters), the others round-robin.
+static uint8_t pickListener(const UnlRadioCfg &cfg, uint32_t period) {
+  uint8_t mask = cfg.listen;
+  if (!mask) return RM_OBI;
+  bool tc = mask & (1 << UL_WMB_TC);
+  uint8_t others = mask & ~(1 << UL_WMB_TC);
+  if (tc && (!others || (period & 1))) return UL_WMB_TC;
+  static uint8_t rr = 0;
+  for (int i = 0; i < UL_COUNT; i++) {
+    rr = (uint8_t)((rr + 1) % UL_COUNT);
+    if (others >> rr & 1) return rr;
+  }
+  return UL_WMB_TC;
 }
 
 static void handleAuxRx() {
@@ -1443,17 +1464,11 @@ static void handleAuxRx() {
   if (len > 255) len = 255;
   int st = radio.readData(buf, len);
   int16_t rssi = (int16_t)radio.getRSSI();
-  int8_t snrQ4 = g_radioMode == RM_LORAWAN ? (int8_t)(radio.getSNR() * 4) : 0;
-  RadioMode m = g_radioMode;
-  if (m == RM_WMBUS) {
-    radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF,
-                       RADIOLIB_IRQ_RX_DEFAULT_FLAGS | (1UL << RADIOLIB_IRQ_SYNC_WORD_VALID), RADIOLIB_IRQ_RX_DEFAULT_MASK, 0);
-  } else {
-    radio.startReceive();
-  }
+  uint8_t l = g_radioMode;
+  int8_t snrQ4 = l == UL_LORAWAN ? (int8_t)(radio.getSNR() * 4) : 0;
+  if (l == UL_LORAWAN) radio.startReceive(); else startAuxReceive();
   if (st != RADIOLIB_ERR_NONE || len < 3) return;   // LoRaWAN CRC errors are dropped here
-  unl_rx_push(m == RM_WMBUS ? UNL_RX_WMBUS : UNL_RX_LORAWAN, buf, len, rssi, snrQ4,
-              m == RM_LORAWAN ? g_auxLwSf : 0, m == RM_LORAWAN ? g_auxLwFreqKHz : 868950);
+  unl_rx_push(l, buf, len, rssi, snrQ4, g_auxSf, g_auxFreqKHz);
 }
 
 // Must the radio stay on the OBI link for the rest of this period?
@@ -1474,12 +1489,16 @@ static bool obiNeedsRadio(uint32_t now, const UnlRadioCfg &cfg) {
   return false;
 }
 
+static bool auxBusy() {   // a third-party frame is mid-air (sync word / LoRa header seen, RxDone pending)
+  return radio.getIrqFlags() & (RADIOLIB_SX126X_IRQ_SYNC_WORD_VALID | RADIOLIB_SX126X_IRQ_HEADER_VALID);
+}
+
 // Dedicated LoRa task: blocks on the DIO1 IRQ (via g_loraSem), so it wakes instantly to answer a reader
 // and yields the core to web/MQTT when idle. High priority => on the single-core C3 it preempts the web
 // task and hits the reader's tight OTA request→block window (fixes the slow reader OTA on the C3).
 static void loraTask(void *) {
-  static uint32_t lastScan = 0, obiWindowEnd = 0, deferStart = 0;
-  static uint32_t period = 0;
+  static uint32_t lastScan = 0, obiWindowEnd = 0, deferStart = 0, period = 0;
+  static uint8_t lastListen = 0xFF;
   g_modeSinceMs = millis();
   for (;;) {
     xSemaphoreTake(g_loraSem, pdMS_TO_TICKS(g_radioMode == RM_OBI ? 20 : 4));
@@ -1488,8 +1507,7 @@ static void loraTask(void *) {
     if (g_rx) {
       g_rx = false;
       if (g_radioMode == RM_OBI) {
-        uint32_t t = millis();
-        uint32_t off = t - g_lastBeaconMs;
+        uint32_t off = millis() - g_lastBeaconMs;
         unl_note_obi_rx((uint16_t)(off > 65535 ? 65535 : off));
         handleRx();
         uint32_t ext = millis() + OBI_EXTEND_MS;
@@ -1500,27 +1518,25 @@ static void loraTask(void *) {
     }
     uint32_t now = millis();
     bool ota = gw_ota_active();
-    bool auxWanted = cfg.wmbusOn || cfg.lorawanOn;
 
-    // ---- period start: (back to) LoRa + beacon
+    // ---- period start: (back to) LoRa + beacon, or the next listener when OBI is off
     if (now - g_lastBeaconMs >= 1000u) {
       if (g_radioMode != RM_OBI) {
-        // a third-party frame is mid-air (sync word / LoRa header seen, RxDone pending): give it a moment
-        uint16_t irq = (uint16_t)radio.getIrqFlags();
-        bool busy = irq & (RADIOLIB_SX126X_IRQ_SYNC_WORD_VALID | RADIOLIB_SX126X_IRQ_HEADER_VALID);
+        bool busy = auxBusy();
         if (busy && !deferStart) { deferStart = now; unl_note_defer(); }
         if (busy && now - deferStart < AUX_DEFER_MAX_MS) continue;
         deferStart = 0;
-        if (cfg.obiOn || !auxWanted) radioUseObi();
-        else if (cfg.wmbusOn && cfg.lorawanOn)            // OBI off, both listeners on: alternate per period
-          (g_radioMode == RM_WMBUS) ? (void)radioUseLorawan(cfg.lorawanFreqKHz, cfg.lorawanSf) : (void)radioUseWmbus();
       }
       g_lastBeaconMs = now;
       period++;
       if (cfg.obiOn) {
+        if (g_radioMode != RM_OBI) radioUseObi();
         sendBeacon();   // keep 1 Hz beacon (readers pace to it)
         obiWindowEnd = millis() + cfg.obiWindowMs;
       } else {
+        uint8_t l = pickListener(cfg, period);
+        if (l == RM_OBI) { if (g_radioMode != RM_OBI) radioUseObi(); }
+        else if (l != g_radioMode || l == UL_LORAWAN) radioUseListener(l, cfg);
         obiWindowEnd = now;
       }
     }
@@ -1531,36 +1547,31 @@ static void loraTask(void *) {
         for (auto &r : readers)
           if (r.used && r.assigned && !r.haveKey && now - r.lastBind >= 3000) sendPairAcks(&r, r.lastRssi);
       // OTA armed but the target hasn't started pulling yet: give its current app firmware OTA_SF9_GRACE_MS
-      // to notice the mismatched-version ACK (over whatever SF it's currently running) and reset into its
-      // bootloader on its own, THEN jump to SF7 -- the bootloader's only SF -- to actually catch that pull.
+      // to notice the mismatched-version ACK and reset into its bootloader, THEN jump to SF7 (the bootloader's).
       if (ota && !g_otaPulled && g_liveSF != 7 && (now - g_otaArmedMs >= OTA_SF9_GRACE_MS))
         applyLiveSF(7);
-      // an OTA forced the radio to SF7 for the reader's bootloader -- once it's fully finished (not just
-      // served -- g_otaSfHoldMs also covers a few seconds for a stray retry) and the desired steady-state SF
-      // differs, switch back.
+      // an OTA forced SF7 -- once it's fully finished (incl. the stray-retry hold) and the steady SF differs, go back.
       if (!ota && g_liveSF != g_loraSF && (g_otaSfHoldMs == 0 || (int32_t)(now - g_otaSfHoldMs) >= 0))
         applyLiveSF(g_loraSF);
     }
 
-    // ---- OBI window over and nothing OBI-critical pending: hand the rest of the period to an aux listener
+    // ---- OBI window over and nothing OBI-critical pending: hand the rest of the period to a listener
     now = millis();
     uint32_t elapsed = now - g_lastBeaconMs;
-    if (g_radioMode == RM_OBI && auxWanted && (int32_t)(now - obiWindowEnd) >= 0 &&
+    if (g_radioMode == RM_OBI && cfg.obiOn && cfg.listen && (int32_t)(now - obiWindowEnd) >= 0 &&
         elapsed + AUX_GUARD_MS + 20 < 1000u && !obiNeedsRadio(now, cfg)) {
-      bool lw = cfg.lorawanOn && (!cfg.wmbusOn || (period & 1));   // both on: alternate period by period
-      if (lw) radioUseLorawan(cfg.lorawanFreqKHz, cfg.lorawanSf);
-      else    radioUseWmbus();
+      uint8_t l = pickListener(cfg, period);
+      if (l != RM_OBI) radioUseListener(l, cfg);
     }
-    // a reconfiguration from the web UI while listening: retune right away
-    if (g_radioMode == RM_WMBUS && !cfg.wmbusOn) radioUseObi();
-    if (g_radioMode == RM_LORAWAN && (!cfg.lorawanOn || cfg.lorawanFreqKHz != g_auxLwFreqKHz || cfg.lorawanSf != g_auxLwSf))
-      radioUseObi();
+    // settings changed from the web UI while a listener runs: drop it right away
+    if (cfg.listen != lastListen) {
+      lastListen = cfg.listen;
+      if (g_radioMode != RM_OBI && !(cfg.listen >> g_radioMode & 1)) radioUseObi();
+    }
     // aux slot ends AUX_GUARD_MS before the next beacon so the switch never delays it
-    if (g_radioMode != RM_OBI && cfg.obiOn && (millis() - g_lastBeaconMs) + AUX_GUARD_MS >= 1000u) {
-      uint16_t irq = (uint16_t)radio.getIrqFlags();
-      bool busy = irq & (RADIOLIB_SX126X_IRQ_SYNC_WORD_VALID | RADIOLIB_SX126X_IRQ_HEADER_VALID);
-      if (!busy || (millis() - g_lastBeaconMs) >= 1000u) radioUseObi();
-    }
+    if (g_radioMode != RM_OBI && cfg.obiOn && (millis() - g_lastBeaconMs) + AUX_GUARD_MS >= 1000u &&
+        (!auxBusy() || (millis() - g_lastBeaconMs) >= 1000u))
+      radioUseObi();
   }
 }
 
@@ -1579,7 +1590,7 @@ void setup() {
   { Preferences p; p.begin("obigw", true); g_loraSF = p.getUChar("lora_sf", OBI_SF_DEFAULT); p.end(); }
   if (g_loraSF != 7 && g_loraSF != 9) g_loraSF = OBI_SF_DEFAULT;   // sanitize a corrupt/unexpected NVS value
 
-  Serial.println("\n=== OBI LoRa mini-gateway ===");
+  Serial.println("\n=== ObiUnlocked ===");
   Serial.printf("gwid: %.6s   radio: %.1f MHz BW%.0f SF%d CR4/%d +%ddBm\n",
                 (const char *)GWID, OBI_FREQ_MHZ, OBI_BW_KHZ, g_loraSF, OBI_CR, OBI_TXPWR_DBM);
 
