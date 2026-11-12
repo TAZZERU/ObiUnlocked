@@ -1,5 +1,10 @@
 # OBI Energy Bridge — Reverse Engineering & Self-Hosting
 
+> 🔓 **ObiUnlocked fork:** this firmware additionally listens for **wireless M-Bus** (heat cost allocators, smoke
+> detectors, water/heat meters, e.g. Minol, Zenner, Techem, ista) and **LoRaWAN** in the OBI radio's idle time, lets
+> you pick devices on the new **📟 Funkgeräte** page and publishes them to MQTT / Home Assistant. The OBI meter
+> reader keeps working. → **[OBIUNLOCKED.md](OBIUNLOCKED.md)** (German)
+
 Full teardown of the **OBI energy-tracking system**: a WiFi/BLE **bridge** (ESP32-C3) that relays data
 from LoRa **meter readers** (BAT32G135) to an AWS-IoT cloud. This repo documents the protocols end-to-end
 and shows how to **run the device against your own cloud** or **talk to the reader directly over
