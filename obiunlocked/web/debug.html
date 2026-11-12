@@ -15,11 +15,12 @@ button.d{background:transparent;border-color:var(--rd);color:var(--rd)}button.d:
 table.hex{border-collapse:collapse;font-family:var(--mono);font-size:13px;white-space:nowrap}
 table.hex thead th{background:var(--panel);color:var(--dim);font-weight:600;padding:5px 4px;border-bottom:1px solid var(--line);text-align:center}
 table.hex td{padding:0 2px;text-align:center}td.off{color:var(--accent);padding:0 10px 0 14px;text-align:right;user-select:all}
-.hx{width:24px;text-align:center;background:transparent;border:1px solid transparent;border-radius:4px;color:var(--txt);font-family:inherit;font-size:13px;padding:2px 0}
-.hx:focus{outline:none;border-color:var(--accent)}.hx.ch{color:#fff;background:var(--amber);font-weight:700}
-.hx.z{color:var(--mut)}td.gap{padding:0 6px}.ascw{padding-left:12px;text-align:left!important;letter-spacing:1px}
+/* table.hex input.hx: must out-rank app.css's generic input:not([type]) padding/border rule */
+table.hex input.hx{width:24px;min-width:0;height:auto;text-align:center;background:transparent;border:1px solid transparent;border-radius:3px;color:var(--txt);font-family:var(--mono);font-size:13px;line-height:1.5;padding:1px 0;margin:0}
+table.hex input.hx:focus{outline:none;border-color:var(--accent)}table.hex input.hx.ch{color:#fff;background:var(--amber);font-weight:700}
+table.hex input.hx.z{color:var(--mut)}td.gap{padding:0 6px}.ascw{padding-left:12px;text-align:left!important;letter-spacing:1px}
 .ac{color:var(--dim)}.ac.np{color:#4a5}.hi{background:var(--acbg)!important;color:#fff!important;border-radius:3px}
-.hx.hi{background:var(--ac)!important;color:#fff!important}
+table.hex input.hx.hi{background:var(--ac)!important;color:#fff!important}
 #insp{display:flex;gap:16px;flex-wrap:wrap;padding:8px 16px;background:var(--panel);border-top:1px solid var(--line);font-family:var(--mono);font-size:12px;position:sticky;bottom:0}
 #insp b{color:var(--accent)}#insp span{color:var(--dim)}
 #efuse{display:none;padding:10px 16px;background:var(--panel2);border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12.5px}
@@ -44,7 +45,7 @@ table.hex td{padding:0 2px;text-align:center}td.off{color:var(--accent);padding:
 .tag{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:5px;background:var(--panel2);color:var(--dim);margin-left:6px}
 .tag.on{background:var(--acbg);color:var(--accent)}
 .fwused{background:var(--accent)}.histused{background:var(--amber)}
-.histfree{background:#2a3f2a}.histidle{background:var(--purple);opacity:.45}.sys{background:#39465a}.gap{background:#050709}
+.histfree{background:#2a3f2a}.histidle{background:var(--purple);opacity:.45}.sys{background:#39465a}.blk.gap,.legend i.gap{background:var(--p3)}   /* flash-map "unused"; not the hex table spacer td.gap */
 .tailused{background:#ff6fae}
 .sysnvs{background:var(--blue)}.sysota{background:#3ddbd9}.sysphy{background:#e08a4f}.syscore{background:var(--red)}
 .empty{color:var(--dim);padding:20px;text-align:center}
