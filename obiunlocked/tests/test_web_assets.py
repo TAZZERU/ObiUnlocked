@@ -108,7 +108,7 @@ def test_served_page(sender, page):
     assert mime == 'text/html; charset=utf-8'
     assert encoding == 'gzip'
     assert b'\x00' in body
-    assert gzip.decompress(body) == page.read_bytes()
+    assert gzip.decompress(body) == embed.minify(page.read_bytes(), '.html')
 
 
 @pytest.mark.parametrize('accept', [
@@ -120,7 +120,7 @@ def test_gzip_offered(sender, accept):
     assert status == '200'
     assert mime == 'text/html; charset=utf-8'
     assert encoding == 'gzip'
-    assert gzip.decompress(body) == (ROOT / 'web/radio.html').read_bytes()
+    assert gzip.decompress(body) == embed.minify((ROOT / 'web/radio.html').read_bytes(), '.html')
 
 
 @pytest.mark.parametrize('accept', [
@@ -155,3 +155,13 @@ def test_incremental_generation(tmp_path):
 def test_missing_pages(tmp_path):
     with pytest.raises(ValueError, match='No web pages'):
         embed.generate(tmp_path, tmp_path / 'generated.h')
+
+
+def test_minify_keeps_scripts_valid_and_shrinks():
+    for page in sorted((ROOT / 'web').glob('*.html')) + sorted((ROOT / 'web').glob('*.js')):
+        raw = page.read_bytes()
+        small = embed.minify(raw, page.suffix)
+        assert len(small) <= len(raw)
+        # every <script> must survive line-wise: same number of non-comment code lines
+        code = [l.strip() for l in raw.decode().split('\n') if l.strip() and not l.strip().startswith('// ')]
+        assert len(small.decode().split('\n')) <= len(code)

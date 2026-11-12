@@ -1,8 +1,36 @@
 """Embed deterministic gzip pages during the build."""
 
 import gzip
+import re
 import io
 from pathlib import Path
+
+
+_CSS_COMMENT = re.compile(r'/\*.*?\*/', re.S)
+_STYLE = re.compile(r'(<style>)(.*?)(</style>)', re.S)
+
+
+def _css(text):
+    text = _CSS_COMMENT.sub('', text)
+    text = re.sub(r'\s+', ' ', text)
+    return re.sub(r'\s*([{};:,>])\s*', r'\1', text).replace(';}', '}').strip()
+
+
+def minify(data, suffix):
+    """Shrink a page before it goes into flash: CSS comments/whitespace, line indentation and full-line //
+    comments. Conservative on purpose -- line breaks stay (no ASI surprises) and nothing inside a line changes."""
+    text = data.decode('utf-8')
+    if suffix == '.css':
+        return _css(text).encode('utf-8')
+    if suffix == '.html':
+        text = _STYLE.sub(lambda m: m.group(1) + _css(m.group(2)) + m.group(3), text)
+    lines = []
+    for line in text.split('\n'):
+        line = line.strip()
+        if not line or line.startswith('// '):
+            continue
+        lines.append(line)
+    return '\n'.join(lines).encode('utf-8')
 
 
 def generate(source, destination):
@@ -15,7 +43,7 @@ def generate(source, destination):
     for page in pages:
         buffer = io.BytesIO()
         with gzip.GzipFile(fileobj=buffer, filename='', mode='wb', mtime=0) as stream:
-            stream.write(page.read_bytes())
+            stream.write(minify(page.read_bytes(), page.suffix))
         data = buffer.getvalue()
         kind = page.suffix[1:].upper()
         symbol = page.stem.upper() + '_' + ('HTML' if kind == 'HTML' else kind) + '_GZ'
