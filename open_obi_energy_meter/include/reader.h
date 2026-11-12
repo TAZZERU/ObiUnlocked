@@ -90,6 +90,12 @@ struct Reader {
   uint8_t  ntStart[2] = {0, 0}, ntEnd[2] = {0, 0};   // up to 2 NT windows
 };
 
+// Reader slots (bound + recently heard unbound ones). 16 is generous for a household; every slot costs ~250 B
+// RAM here plus the per-slot history state in gateway_web.cpp (HIST_SLOTS). Override with -D OBI_MAX_READERS=N.
+#ifndef OBI_MAX_READERS
+#define OBI_MAX_READERS 16
+#endif
+
 // defined in main.cpp
 extern Reader readers[];
 extern const int MAX_READERS;

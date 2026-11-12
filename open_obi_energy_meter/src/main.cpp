@@ -64,7 +64,7 @@ class SharedSX1262 : public SX1262 {
 SharedSX1262 radio(new Module(PIN_LORA_NSS, PIN_LORA_DIO1, PIN_LORA_RST, PIN_LORA_BUSY));
 
 // ---- per-reader state (struct in reader.h, shared with the web/MQTT module) --
-const int MAX_READERS = 64;   // ~117 B/entry -> ~7.5 KB RAM for 64; the real ceiling is LoRa airtime, not memory
+const int MAX_READERS = OBI_MAX_READERS;   // ~250 B/entry; a household has 1-3 readers (+ briefly seen phantoms)
 Reader readers[MAX_READERS];
 
 // Default upload interval (seconds) for a NEW reader that the user hasn't configured yet. A fresh reader is
@@ -284,21 +284,38 @@ static void hexdump(const uint8_t *p, size_t n) {
 }
 
 // ---- live radio log ring buffer (served by the /radio web page) ------------
-static const int RAW_MAX = 255;   // store the whole packet (LoRa RX buffer is 256 B) so nothing is truncated
-static const int DEC_MAX = 32;    // decrypted energy payload is at most ~24 B (1.2.x layout); some headroom
-static const int DECINFO_MAX = 150;  // fits describeEnergy()'s longest formatted string
-struct Rlog { uint32_t seq, ms; char dir; uint8_t h[3]; int16_t cmd, len, rssi, snr; char note[20];
-              uint8_t rawLen; uint8_t raw[RAW_MAX];
-              uint8_t decLen; uint8_t dec[DEC_MAX];      // dec: TEA-decrypted energy payload, if any (see gw_radio_log_dec)
-              char decInfo[DECINFO_MAX]; };               // decInfo: byte-range-annotated field breakdown of dec, e.g. "[6:10]imp=..."
+// Fixed-size headers plus ONE shared byte pool for the variable parts (raw frame, decrypted payload, field
+// breakdown). Most frames are 10-40 bytes, so a per-entry 255+32+150 byte reservation (the old layout, ~15 KB)
+// mostly held zeros. Positions are absolute (monotonic) pool offsets: an entry's bytes are still valid while
+// fewer than RL_POOL bytes were written after them; older entries are listed without their byte dump.
 #ifndef OBI_RADIO_LOG_ENTRIES
-#define OBI_RADIO_LOG_ENTRIES 32
+#define OBI_RADIO_LOG_ENTRIES 40
+#endif
+#ifndef OBI_RADIO_LOG_POOL
+#define OBI_RADIO_LOG_POOL 4096
 #endif
 static_assert(OBI_RADIO_LOG_ENTRIES > 0, "Radio log must retain entries");
 static const int RLOG_N = OBI_RADIO_LOG_ENTRIES;
+static const uint32_t RL_POOL = OBI_RADIO_LOG_POOL;
+static const int RAW_MAX = 255, DEC_MAX = 32, DECINFO_MAX = 150;
+struct Rlog { uint32_t seq, ms, rawPos, decPos; char dir; uint8_t h[3]; int16_t cmd, len, rssi, snr; char note[20];
+              uint8_t rawLen, decLen, infoLen; };
 static Rlog g_rl[RLOG_N];
+static uint8_t g_rlPool[RL_POOL];
+static uint32_t g_rlPoolPos = 0;
 static volatile uint32_t g_rlSeq = 0;
 static int g_rlHead = 0;
+static uint32_t rlPut(const uint8_t *p, size_t n) {
+  uint32_t at = g_rlPoolPos;
+  for (size_t i = 0; i < n; i++) g_rlPool[(at + i) % RL_POOL] = p[i];
+  g_rlPoolPos = at + n;
+  return at;
+}
+static bool rlValid(uint32_t pos, size_t n) { return g_rlPoolPos - pos <= RL_POOL && n <= RL_POOL; }
+static void rlHex(String &out, uint32_t pos, size_t n) {
+  static const char *H = "0123456789ABCDEF";
+  for (size_t i = 0; i < n; i++) { uint8_t b = g_rlPool[(pos + i) % RL_POOL]; out += H[b >> 4]; out += H[b & 15]; }
+}
 int gw_radio_log(char dir, const uint8_t h[3], int cmd, int len, int rssi, int snr, const char *note,
                  const uint8_t *raw, int rawLen) {
   int idx = g_rlHead;
@@ -309,28 +326,21 @@ int gw_radio_log(char dir, const uint8_t h[3], int cmd, int len, int rssi, int s
   strncpy(e.note, note ? note : "", sizeof e.note - 1); e.note[sizeof e.note - 1] = 0;
   int n = rawLen < 0 ? 0 : (rawLen > RAW_MAX ? RAW_MAX : rawLen);
   e.rawLen = (uint8_t)n;
-  if (raw && n) memcpy(e.raw, raw, n);
-  e.decLen = 0;
-  e.decInfo[0] = 0;
+  e.rawPos = (raw && n) ? rlPut(raw, n) : g_rlPoolPos;
+  e.decLen = 0; e.infoLen = 0;
   g_rlHead = (g_rlHead + 1) % RLOG_N;
   return idx;
 }
-// Attach the TEA-decrypted energy payload to an already-logged RX entry (called right after decryption
-// succeeds, from the SAME handleRx invocation that logged it via gw_radio_log — idx is still valid, nothing
-// else writes to g_rl between the two calls). Lets the /radio page show cleartext energy values alongside
-// the still-encrypted raw frame bytes, without needing a separate one-off debug field (see git history:
-// an earlier "dbgRaw" field on Reader served a similar purpose for the LATEST reading only; this instead
-// shows it per-packet, live, for every reader, and doesn't linger in the Reader struct). `info`, if given,
-// is a byte-range-annotated field breakdown (see describeEnergy()/describeEnergyOld()) shown next to the
-// raw hex so it's clear which bytes produced which decoded value.
+// Attach the TEA-decrypted energy payload (+ a byte-range-annotated field breakdown, see describeEnergy())
+// to an already-logged RX entry, so the /radio page shows cleartext values next to the raw frame.
 void gw_radio_log_dec(int idx, const uint8_t *dec, int len, const String &info) {
   if (idx < 0 || idx >= RLOG_N || !dec || len <= 0) return;
   Rlog &e = g_rl[idx];
   int n = len > DEC_MAX ? DEC_MAX : len;
-  e.decLen = (uint8_t)n;
-  memcpy(e.dec, dec, n);
-  strncpy(e.decInfo, info.c_str(), DECINFO_MAX - 1);
-  e.decInfo[DECINFO_MAX - 1] = 0;
+  size_t il = info.length() > (size_t)DECINFO_MAX - 1 ? DECINFO_MAX - 1 : info.length();
+  e.decPos = rlPut(dec, n);
+  rlPut((const uint8_t *)info.c_str(), il);
+  e.decLen = (uint8_t)n; e.infoLen = (uint8_t)il;
 }
 void gw_radio_json(uint32_t since, void (*sink)(const String &chunk)) {
   String chunk; chunk.reserve(1500);
@@ -345,17 +355,18 @@ void gw_radio_json(uint32_t since, void (*sink)(const String &chunk)) {
     chunk += "{\"s\":" + String(e.seq) + ",\"t\":" + String(e.ms) + ",\"d\":\"" + String(e.dir) +
          "\",\"h\":\"" + String(hs) + "\",\"c\":" + String(e.cmd) + ",\"l\":" + String(e.len) +
          ",\"r\":" + String(e.rssi) + ",\"sn\":" + String(e.snr) + ",\"n\":\"" + String(e.note) + "\",\"b\":\"";
-    char bb[3];
-    for (int k = 0; k < e.rawLen; k++) { snprintf(bb, sizeof bb, "%02X", e.raw[k]); chunk += bb; }
+    if (rlValid(e.rawPos, e.rawLen)) rlHex(chunk, e.rawPos, e.rawLen);
     chunk += "\"";
-    if (e.decLen) {
+    if (e.decLen && rlValid(e.decPos, e.decLen + e.infoLen)) {
       chunk += ",\"dc\":\"";
-      for (int k = 0; k < e.decLen; k++) { snprintf(bb, sizeof bb, "%02X", e.dec[k]); chunk += bb; }
+      rlHex(chunk, e.decPos, e.decLen);
       chunk += "\"";
-      // decInfo is built entirely by us (describeEnergy()/describeEnergyOld(), only digits/letters/
-      // "[]:()=,%" and the literal words "ok"/"BAD") -- never contains a quote or backslash, so it's
-      // safe to embed directly without a JSON-escaping helper.
-      if (e.decInfo[0]) chunk += ",\"di\":\"" + String(e.decInfo) + "\"";
+      // the breakdown is built entirely by us (digits/letters/"[]:()=,%") -- no JSON escaping needed
+      if (e.infoLen) {
+        chunk += ",\"di\":\"";
+        for (int k = 0; k < e.infoLen; k++) chunk += (char)g_rlPool[(e.decPos + e.decLen + k) % RL_POOL];
+        chunk += "\"";
+      }
     }
     chunk += "}";
     if (chunk.length() > 1400) { sink(chunk); chunk = ""; }

@@ -1,4 +1,5 @@
 #include "ota_hist.h"
+#include "reader.h"   // OBI_MAX_READERS
 
 #ifdef OBI_OTA_HIST_SUPPORTED
 
@@ -224,7 +225,7 @@ bool otaHist_writesPaused() { return g_paused; }
 // that one reader, not an arbitrary small per-reader cap. Both BULK (read) and the freshly reformatted
 // TAIL (write) are on the SAME currently-inactive partition -- never the active one (see the long comment
 // below for why that split matters on this hardware).
-static const int OTA_HIST_MAX_READERS = 64;   // sizing match for gateway_web.cpp's own HIST_SLOTS/MAX_READERS
+static const int OTA_HIST_MAX_READERS = OBI_MAX_READERS;   // sizing match for gateway_web.cpp's own HIST_SLOTS/MAX_READERS
 static void snapshotBulkIntoTail() {
   static String names[OTA_HIST_MAX_READERS];
   static long   sizes[OTA_HIST_MAX_READERS];

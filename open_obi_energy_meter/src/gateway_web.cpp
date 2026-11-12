@@ -1568,8 +1568,7 @@ static void handleDebugPage() { sendGzipHtml(server, DEBUG_HTML_GZ); }
 // asked for — the per-day consumption from the kWh-COUNTER deltas (day[i].import - day[i-1].import),
 // because the Watt reading is not always sent by the meter and can't be trusted; Watt is only tabled.
 // All file I/O runs on the web task (core 0), never on the LoRa loop.
-#define HIST_SLOTS 64                   // must stay >= MAX_READERS (defined in main.cpp; it's an extern const,
-                                        // so it can't size a static array here)
+#define HIST_SLOTS OBI_MAX_READERS      // one history slot per reader slot (see reader.h)
 // No global price setting: every reader has its own (Reader.priceCentOverride/exportCentOverride in
 // reader.h), editable from the History page's header once that reader is selected. These two literals are
 // only the bootstrap default shown/used for a reader that has never had its own price saved yet -- see
