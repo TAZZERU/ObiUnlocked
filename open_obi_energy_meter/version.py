@@ -41,7 +41,7 @@ target  = env["PIOENV"]
 # A release/CI build can pin the exact version via env (e.g. the git tag), overriding the local counter.
 # Local builds leave FW_VERSION_OVERRIDE unset and keep the "BASE_VERSION.build" behaviour unchanged.
 override = os.environ.get("FW_VERSION_OVERRIDE", "").strip().lstrip("v")
-version  = override if override else "%s.%d" % (BASE_VERSION, build)
+version  = override if override else "%s.%d-unl" % (BASE_VERSION, build)   # "-unl": ObiUnlocked fork build
 date     = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
 print("version.py: fw %s  target=%s  git=%s" % (version, target, ghash))
