@@ -2,6 +2,7 @@
 // Runs on its own FreeRTOS task pinned to core 0 so the HTTP/MQTT work never stutters the
 // LoRa gateway (which runs on the Arduino loop, core 1).
 #include "gateway_web.h"
+#include "unl.h"
 #include "setup_ap.h"
 #include "bthome_ble.h"
 #include "web_gzip.h"
@@ -2706,6 +2707,7 @@ static void startServices() {
   server.on("/api/history/csv", HTTP_GET,  guard(handleHistoryCsv));
   server.on("/api/history/readers", HTTP_GET, guard(handleHistoryReaders));
   server.on("/api/history/clear", HTTP_POST, guard(handleHistoryClear));
+  unl_register_routes(server, guard);                               // ObiUnlocked: /meters + /api/unl/*
   // EcoTracker emulation: /v1/json is deliberately UNguarded — the EcoFlow inverter polling it is a
   // headless ESP32 that cannot log in. It only ever exposes one reader's W/Wh readings, is off by
   // default, and answers 404 while disabled. The config endpoint stays behind the guard like the rest.
@@ -3224,6 +3226,7 @@ static void mqttService() {
       mqtt.subscribe(installTopic().c_str());                   // <base>/gateway/<gwid>/update/install
       mqtt.publish(avt.c_str(), "online", true);
       publishGatewayDiscovery();
+      unl_mqtt_reset();                                         // ObiUnlocked: re-announce selected devices
       g_updPubDirty = true;                                     // (re)assert the update state, see below
       for (int i = 0; i < MAX_READERS; i++) { readers[i].mqttDiscovered = false;   // re-announce after (re)connect
                                               readers[i].mqttAvail = -1; }         // ...and re-assert online/offline
@@ -3256,6 +3259,8 @@ static void mqttService() {
         if (ok) ghNoteLatest(tag, url);
       } }
     if (g_updPubDirty) { g_updPubDirty = false; publishUpdateState(false); }
+    // ObiUnlocked: selected wM-Bus / LoRaWAN devices -> <base>/wmbus|lorawan/<key> + HA device discovery
+    unl_mqtt_service(mqtt, String(g_mqttTopic), avtTopic(), "obi_gw_" + String(gwId()), g_mqttPubCount);
     // Gateway state (retained) — temp, uptime, heap, wifi rssi, reader counts; keyed by MAC via the topic.
     // Slow-moving, so it stays on the fixed g_pubEvery cadence and does NOT need to track the reader rate.
     // Two reader counts: readers_all = every reader we've heard (bound or greyed), readers_bound = only the
@@ -3552,6 +3557,7 @@ static void webTask(void *) {
     if (g_portalReq) { g_portalReq = false; runPortal(); }   // WiFi button pressed -> open the WM portal
     if (g_apReq) { g_apReq = false; g_apWindow.start(millis()); Serial.println("[web] button: setup-AP window opened"); }
     bthome_service();
+    unl_service();   // ObiUnlocked: decode wM-Bus / LoRaWAN frames queued by the LoRa task
     // WiFi (re)connect edge: MQTT + NTP.
     bool conn = WiFi.status() == WL_CONNECTED;
     if (conn != g_wifiOk) {
@@ -3654,6 +3660,7 @@ void web_open_setup_ap() { g_apReq = true; }
 
 void web_factory_reset() {
   bthome_reset();
+  unl_factory_reset();                // ObiUnlocked settings + wM-Bus/LoRaWAN device lists + AES keys
   wm.resetSettings();                 // erase saved WiFi credentials (WiFiManager NVS)
   prefs.begin("obigw", false);        // erase MQTT host/port/user/pass/topic + web login + tz + price
   prefs.clear();
