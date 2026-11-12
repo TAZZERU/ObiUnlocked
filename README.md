@@ -5,8 +5,8 @@ receiver for your whole flat.** Your OBI electricity-meter reader keeps working.
 gateway also picks up the meters, smoke detectors and sensors around you, shows them in a web dashboard in plain
 words, and sends the ones you choose to MQTT / Home Assistant. No cloud.
 
-> German version: [README.de.md](README.de.md) · Based on [OpenOBI](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud)
-> by atc1441 and contributors (upstream docs: [OPENOBI.md](OPENOBI.md))
+> German version: [README.de.md](README.de.md) · Built on [OpenOBI](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud)
+> by **atc1441** and contributors, see [Credits](#credits) · upstream docs: [OPENOBI.md](OPENOBI.md)
 
 | | |
 |---|---|
@@ -21,13 +21,81 @@ go out over MQTT.
 
 ## Install
 
-**Gateway already runs OpenOBI:** open its web UI → *Settings → Firmware*, upload `firmware.bin`. WiFi, MQTT,
-paired readers and history are kept. A broken image is rejected and the running firmware stays.
+### Gateway already runs OpenOBI (or an older ObiUnlocked)
 
-**Stock gateway:** do the one-time conversion described by OpenOBI
-([stock gateway → custom firmware](OPENOBI.md#stock-to-custom)). Every later update goes through the web UI.
+Open the gateway's web UI → **Settings → Firmware** and upload `obi_gateway_c3-<version>.bin` from the
+[Releases page](https://github.com/TAZZERU/ObiUnlocked/releases). WiFi, MQTT, paired readers and history are
+kept. A broken image is rejected and the running firmware stays.
 
-**Build it yourself:**
+To get future updates straight from GitHub, enter `TAZZERU/ObiUnlocked` as the repository in the same place.
+
+### Gateway still runs the original OBI / heyOBI firmware
+
+The stock ESP32-C3 has a **locked bootloader**: ROM download mode is fused off, so USB/UART/JTAG flashing is
+impossible. The gateway does accept an **unsigned firmware update from its cloud**, though. You point it at a
+small MQTT server on your own computer, once, and serve ObiUnlocked as the "update". After that it never needs a
+cloud again.
+
+This method was found and built by **atc1441 and the OpenOBI contributors** (see [Credits](#credits)), and all
+tools used below come from their work.
+
+**Easiest: let the installer do it.**
+
+```bash
+git clone https://github.com/TAZZERU/ObiUnlocked.git && cd ObiUnlocked
+python3 04-connect-your-own-cloud/tools/install_obiunlocked.py
+```
+
+The installer works through every step below on its own: it downloads the latest firmware, finds the gateway
+over Bluetooth, gets its key, creates certificates, runs the temporary server, sets WiFi, pairs the reader and
+shows the download progress. It only asks for your WiFi and your OBI login (or a key you already have).
+`--help` lists options for unattended use.
+
+**Or step by step by hand.** You need:
+- a computer on the same network, with Python 3 and Bluetooth
+- `pip install cryptography bleak paho-mqtt`
+- an OBI account (any account works), or physical UART access to the gateway
+
+1. **Get the gateway's TEA key.** It protects the Bluetooth setup channel.
+   - Find the Bluetooth name `OBI-XXXXXX`: power the gateway, or hold its button for 2 s, then run
+     `python 04-connect-your-own-cloud/tools/ble_scan.py`.
+   - Run `python 04-connect-your-own-cloud/tools/fetch_tea_key.py` and enter your OBI login and that name.
+   - Without an account: read the key over UART instead
+     ([details](04-connect-your-own-cloud/README.md#way-2--from-uart-physical-access-to-the-gateway)).
+2. **Create your own certificates.** Use the LAN IP of the computer that will act as the temporary cloud:
+   ```bash
+   cd 04-connect-your-own-cloud/tools
+   python gen_certs.py --host 192.168.1.50
+   ```
+3. **Start the temporary cloud with ObiUnlocked as the update:**
+   ```bash
+   python mqtts_server.py --host 0.0.0.0 --port 8883 --ota-firmware obi_gateway_c3-<version>.bin
+   ```
+4. **Point the gateway at it over Bluetooth.** In a second terminal (same folder), give it WiFi, your CA and the broker, and
+   release it from the previous owner. `--pair-sensor` also pairs your meter reader while Bluetooth is open.
+   ```bash
+   python ble_provision.py --config pki/ble_config.json --key <TEA-KEY> --unbind \
+       --pair-sensor --ssid <your-wifi> --password <your-wifi-password>
+   ```
+   No Python? Use the browser tool [06-tools/obi_gateway_ble.html](06-tools/obi_gateway_ble.html) instead.
+   Keep the WiFi password at 32 characters or less on stock firmware.
+5. **Wait.** The gateway joins your WiFi, connects to your server, downloads ObiUnlocked in chunks (watch the
+   server log) and reboots into it.
+6. **Set it up.** Join the WiFi hotspot **`ObiUnlocked-XXXXXX`**, open `http://192.168.4.1`, enter your WiFi
+   (and MQTT if you like). The dashboard is then reachable at the gateway's IP. Stop the temporary server. Your
+   meter reader re-pairs within a minute; if not, use **Power meters → Bind all readers for 3 min** and press
+   the reader's button.
+7. **Back up the original firmware.** It is still in the second firmware slot. Open **Debug → Dump full flash**
+   and keep the file. Your next update overwrites that slot, so do this right away.
+
+> Step 5 is the only hard-to-reverse step: a bad image can't be fixed over UART. The update is brick-safe,
+> though. A broken image is rejected and the old firmware keeps running, and step 7 gives you a full backup
+> for going back.
+
+More background, a German version and the manual variants of each step are in
+[OPENOBI.md](OPENOBI.md#stock-to-custom) and [04-connect-your-own-cloud](04-connect-your-own-cloud/README.md).
+
+### Other boards / build it yourself
 
 ```bash
 cd obiunlocked
@@ -36,8 +104,14 @@ pio run -e obi_gateway_c3          # -> .pio/build/obi_gateway_c3/firmware.bin
 pio run -e obi_gateway_c3 -t push  # build + upload, address/login in platformio.local.ini
 ```
 
-The other OpenOBI boards (Heltec Vision Master / WiFi LoRa 32 V3, LILYGO T-Beam, Seeed XIAO S3, generic ESP32 /
-ESP32-S3 + SX1262) build the same way. Releases built by CI carry a `.bin` for each of them.
+Supported boards:
+- Heltec Vision Master E290 / WiFi LoRa 32 V3
+- LILYGO T-Beam
+- Seeed XIAO ESP32S3
+- generic ESP32 / ESP32-S3 + SX1262
+
+These boards have no locked bootloader. Flash them over USB (`-t upload`) or use the matching `.bin` from the
+release.
 
 ## Using it
 
@@ -164,6 +238,25 @@ git fetch upstream && git merge upstream/main
 
 The in-app GitHub updater only looks for releases once you enter a repository under *Settings → Firmware*, for
 example your fork. Otherwise an OpenOBI release would replace ObiUnlocked.
+
+## Credits
+
+ObiUnlocked stands entirely on the shoulders of **[OpenOBI](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud)**
+by **[atc1441](https://github.com/atc1441)** (Aaron Christophel). His work made this possible:
+- reverse engineering the OBI / heyOBI system: LoRa protocol, ECDH + TEA, BLE and cloud API
+- the trick to free the locked gateway through its own update path
+- the complete open gateway firmware that ObiUnlocked extends: reader pairing, energy decoding, history,
+  reader OTA, web UI, MQTT
+
+Thank you, and thanks to everyone who contributed to OpenOBI: Patric, PNP, Michel Ferreira Ribeiro,
+Stefan Hacker, 6ffm70, Ronald Fiering, Merlin Schumacher, 85368.MB, sirdeekay, RoXXoR and others.
+
+If you like this project, please also star and support the original:
+https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud
+
+The radio decoders are independent implementations. Their formats were learned from
+[wmbusmeters](https://github.com/wmbusmeters/wmbusmeters) and [rtl_433](https://github.com/merbanan/rtl_433),
+credited in [NOTICE.md](NOTICE.md).
 
 ## Legal
 

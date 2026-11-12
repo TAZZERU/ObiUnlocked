@@ -23,14 +23,61 @@ Dessen Doku, also Reverse Engineering, eigene Cloud und Flashen des Original-Gat
 
 ## Installation
 
-**OpenOBI läuft schon auf dem Gateway:** Öffne im Browser **Einstellungen → Firmware**, lade `firmware.bin` hoch,
-fertig. WLAN, MQTT, gekoppelte Leseköpfe und die Historie bleiben erhalten. Ein fehlerhaftes Image weist das
-Gateway ab, die laufende Firmware bleibt dann unverändert.
+### Auf dem Gateway läuft schon OpenOBI (oder ein älteres ObiUnlocked)
 
-**Original-Gateway mit Hersteller-Firmware:** Einmalig den Weg aus OpenOBI gehen
-([Stock-Gateway → eigene Firmware](OPENOBI.md#stock-to-custom)). Danach geht jedes Update über die Weboberfläche.
+Öffne im Browser **Einstellungen → Firmware** und lade `obi_gateway_c3-<version>.bin` von der
+[Release-Seite](https://github.com/TAZZERU/ObiUnlocked/releases) hoch. WLAN, MQTT, gekoppelte Leseköpfe und die
+Historie bleiben erhalten. Ein fehlerhaftes Image weist das Gateway ab, die laufende Firmware bleibt dann
+unverändert. Trägst du an derselben Stelle `TAZZERU/ObiUnlocked` als Repository ein, holt sich das Gateway
+künftige Updates selbst.
 
-**Bauen:**
+### Auf dem Gateway läuft noch die Original-Firmware von OBI
+
+Der Bootloader ist gesperrt, Flashen über USB, UART oder JTAG geht also nicht. Das Gateway nimmt aber ein
+**unsigniertes Update „aus seiner Cloud“** an. Dafür spielt dein Computer einmalig diese Cloud und liefert
+ObiUnlocked als Update aus. Danach braucht das Gateway nie wieder eine Cloud. Diesen Weg und die Werkzeuge dafür
+haben **atc1441 und die OpenOBI-Mitwirkenden** entwickelt (siehe [Credits](#credits)).
+
+**Am einfachsten mit dem Installationsskript:**
+
+```bash
+git clone https://github.com/TAZZERU/ObiUnlocked.git && cd ObiUnlocked
+python3 04-connect-your-own-cloud/tools/install_obiunlocked.py
+```
+
+Das Skript erledigt alles nacheinander:
+- Firmware herunterladen
+- Gateway per Bluetooth finden
+- Schlüssel holen
+- Zertifikate erzeugen
+- temporären Server starten
+- WLAN setzen und Lesekopf koppeln
+- Download-Fortschritt anzeigen
+
+Es fragt nur nach WLAN und OBI-Login (oder einem Schlüssel, den du schon hast). Voraussetzung: Computer mit
+Python 3 und Bluetooth im selben Netz wie das Gateway.
+
+**Oder von Hand** (Werkzeuge in `04-connect-your-own-cloud/tools`, vorher `pip install cryptography bleak paho-mqtt`):
+
+1. **TEA-Schlüssel holen.**
+   - Bluetooth-Namen `OBI-XXXXXX` finden: `python ble_scan.py`. Vorher das Gateway neu einstecken oder seine
+     Taste 2 s halten.
+   - `python fetch_tea_key.py` ausführen, mit beliebigem OBI-Login. Alternativ den Schlüssel per UART auslesen.
+2. **Zertifikate erzeugen:** `python gen_certs.py --host <IP dieses Computers>`
+3. **Server mit ObiUnlocked starten:** `python mqtts_server.py --host 0.0.0.0 --port 8883 --ota-firmware obi_gateway_c3-<version>.bin`
+4. **Gateway per Bluetooth einrichten:** in einem zweiten Terminal
+   `python ble_provision.py --config pki/ble_config.json --key <TEA-KEY> --unbind --pair-sensor --ssid <WLAN> --password <WLAN-Passwort>`.
+   Das WLAN-Passwort darf höchstens 32 Zeichen haben.
+5. **Warten:** Das Gateway lädt ObiUnlocked herunter (im Server-Log zu sehen) und startet damit neu.
+6. **Einrichten:** Mit dem Hotspot **`ObiUnlocked-XXXXXX`** verbinden, `http://192.168.4.1` öffnen und WLAN
+   (und bei Bedarf MQTT) eintragen. Den Server danach beenden.
+7. **Sichern:** Sofort unter **Debug → Dump full flash** ein Backup ziehen. Die Original-Firmware liegt noch im
+   zweiten Slot. Das nächste Update überschreibt diesen Slot.
+
+Das Update ist sicher gegen Fehlversuche: Ein kaputtes Image wird abgelehnt. Mehr Details stehen in
+[OPENOBI.md](OPENOBI.md#stock-to-custom).
+
+### Andere Boards / selbst bauen
 
 ```bash
 cd obiunlocked
@@ -39,8 +86,8 @@ pio run -e obi_gateway_c3        # -> .pio/build/obi_gateway_c3/firmware.bin
 ```
 
 Mit `pio run -e obi_gateway_c3 -t push` wird gebaut und direkt hochgeladen. Adresse und Login stehen in
-`platformio.local.ini` (siehe `platformio.local.ini.example`). Die anderen Board-Varianten aus OpenOBI
-(Heltec, LILYGO, XIAO, generic) bauen genauso.
+`platformio.local.ini`. Heltec, LILYGO, XIAO und generische ESP32 + SX1262 haben keinen gesperrten Bootloader.
+Sie flashst du per USB (`-t upload`) oder mit der passenden `.bin` aus dem Release.
 
 ## Weboberfläche
 
@@ -159,6 +206,20 @@ git merge upstream/main
 
 Die automatische GitHub-Update-Prüfung von OpenOBI ist hier **aus**, solange unter Einstellungen → Firmware kein
 Repository eingetragen ist. Ein OpenOBI-Release würde sonst ObiUnlocked überschreiben.
+
+## Credits
+
+ObiUnlocked baut vollständig auf **[OpenOBI](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud)** von
+**[atc1441](https://github.com/atc1441)** (Aaron Christophel) auf. Von ihm stammen:
+- das Reverse Engineering des OBI/heyOBI-Systems
+- der Weg, das gesperrte Gateway über seinen eigenen Update-Kanal zu befreien
+- die komplette offene Gateway-Firmware, die ObiUnlocked erweitert
+
+Danke dafür, und an alle OpenOBI-Mitwirkenden: Patric, PNP, Michel Ferreira Ribeiro, Stefan Hacker, 6ffm70,
+Ronald Fiering, Merlin Schumacher, 85368.MB, sirdeekay, RoXXoR und weitere. Wenn dir das Projekt gefällt,
+unterstütze bitte auch das Original. Die Funk-Decoder sind eigene Implementierungen. Die Formate dafür stammen
+aus [wmbusmeters](https://github.com/wmbusmeters/wmbusmeters) und [rtl_433](https://github.com/merbanan/rtl_433)
+(siehe [NOTICE.md](NOTICE.md)).
 
 ## Grenzen
 
