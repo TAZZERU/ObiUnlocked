@@ -9,12 +9,14 @@
 #include "web_assets.h"
 #include "reader.h"
 #include "flash_dbg.h"
+#include "hist_ram.h"             // in-RAM sample ring for the reduced/off history storage modes
 #include <WiFi.h>
 #include <WiFiManager.h>          // tzapu/WiFiManager
 #include <WebServer.h>
 #include <Update.h>               // ESP32 self-OTA (reflash our own app into the other OTA slot)
 #include <HTTPClient.h>           // pull the latest release .bin from GitHub (settings -> firmware)
 #include <WiFiClientSecure.h>     // HTTPS to api.github.com / release asset host
+#include <mbedtls/x509_crt.h>     // /api/mqtt/tlsdiag: parse + verify the broker chain by hand
 #include <memory>                 // std::unique_ptr<WiFiClientSecure> -- see ghOtaTask()'s resolveAndGet()
 #include <esp_partition.h>        // partition list for the /debug hex editor
 #include <esp_ota_ops.h>           // running/inactive OTA partition -- /debug flash map
@@ -103,8 +105,13 @@ static float gwTempC() {      // internal temperature sensor (°C); NAN on chips
 
 static char     g_mqttHost[64] = "";
 static uint16_t g_mqttPort = 1883;
-static char     g_mqttUser[32] = "";
-static char     g_mqttPass[32] = "";
+// MQTT 3.1.1 allows user/password up to 65535 bytes each and brokers happily issue long generated
+// passwords, so 31 usable characters was simply too small -- see handleMqttCfg(). The CONNECT packet
+// (client id + user + password + LWT topic) still fits the 1 KB PubSubClient buffer set in web_begin()
+// several times over -- which is also why a cap stays: PubSubClient::connect() assembles that packet with
+// no length check of its own (unlike publish(), which does bounds-check), so the limit has to live here.
+static char     g_mqttUser[64] = "";
+static char     g_mqttPass[128] = "";
 static char     g_mqttTopic[48] = "obi/gateway";
 static bool     g_mqttTls = false;   // MQTTS: wrap the MQTT socket in TLS (WiFiClientSecure). Broker side only.
 static String   g_mqttCa;            // optional PEM CA cert to verify the broker; empty = encrypt-only (setInsecure)
@@ -112,6 +119,63 @@ static char     g_tz[48] = "CET-1CEST,M3.5.0,M10.5.0/3";   // POSIX TZ for the h
 static char     g_ntp[64] = "pool.ntp.org";                // NTP server for the wall clock (user-settable)
 static volatile bool g_nightMode = false;                    // disable normal-operation LED activity
 static bool g_hideUnbound = false;                           // dashboard: hide unbound (pending) reader cards (persisted, NVS "obigw"/"hideunb")
+
+// ---- how much of the history is written to flash (NVS "obigw"/"histmode") ----------------------------
+// Asked for by a user who already archives every reading in InfluxDB via MQTT and wants the gateway to
+// stop wearing its flash for a second copy:
+//   0 = full      raw samples + daily rows (the default; unchanged behaviour)
+//   1 = daily     no raw-sample log any more. That log is the only frequent writer -- one sample per
+//                 reader per 30 s at worst -- while a daily row is ONE write per reader per day, and it is
+//                 what keeps the permanent bar charts AND the "start of today" baseline that beginDay()
+//                 and the MQTT today_* fields recover from after a restart. The low-wear choice for most.
+//   2 = off       nothing is written at all. Worth knowing before picking it: with no durable previous-day
+//                 close on flash there is nothing to recover that baseline from, so after a restart the
+//                 MQTT today_* fields stay null until the next midnight (the gap GitHub issue #108 was
+//                 about) and the daily bar chart starts from the running day. Fine when the real archive
+//                 lives elsewhere, which is exactly the case this mode is for.
+// In both reduced modes the History page's sample charts come from an in-RAM ring (hist_ram.h) instead of
+// flash. The ring is allocated only while the mode is not 0, so a default gateway pays no heap for it.
+static uint8_t g_histMode = 0;
+static ObiRamHistory g_ramHist;
+#define HIST_RAM_CAP 512            // ~10 KB of heap; at the 30 s minimum spacing that is ~4 h for one reader
+#define HIST_RAM_HEAP_FLOOR 60000   // never take the ring's memory out of what TLS/OTA needs to stay healthy
+
+static void histRamEnable(bool on) {
+  if (on == g_ramHist.active()) return;
+  if (on) {
+    size_t want = (size_t)HIST_RAM_CAP * sizeof(ObiRamSample);
+    if (ESP.getFreeHeap() < want + HIST_RAM_HEAP_FLOOR) {
+      Serial.printf("[hist] RAM ring skipped: only %u B heap free, need %u + reserve\n",
+                    (unsigned)ESP.getFreeHeap(), (unsigned)want);
+      return;                      // the page then shows daily rows only -- no samples, but nothing breaks
+    }
+    ObiRamSample *mem = (ObiRamSample *)malloc(want);
+    if (!mem) { Serial.println("[hist] RAM ring allocation failed"); return; }
+    g_ramHist.attach(mem, HIST_RAM_CAP);
+    Serial.printf("[hist] RAM sample ring: %u entries (%u B)\n", (unsigned)HIST_RAM_CAP, (unsigned)want);
+  } else {
+    ObiRamSample *mem = g_ramHist.buf;
+    g_ramHist.detach();
+    free(mem);
+    Serial.println("[hist] RAM sample ring released");
+  }
+}
+
+// The ring's samples for one reader, as the same CSV the flash log holds -- see obi_ram_row().
+static String ramSamplesCsv(const String &id) {
+  String out;
+  if (!g_ramHist.active() || id.length() != 6) return out;
+  uint8_t h[3];
+  for (int i = 0; i < 3; i++) h[i] = (uint8_t)strtol(id.substring(i * 2, i * 2 + 2).c_str(), nullptr, 16);
+  out.reserve((size_t)g_ramHist.countFor(h) * 34u + 16u);
+  char line[80];
+  for (uint16_t i = 0; i < g_ramHist.count(); i++) {
+    const ObiRamSample *s = g_ramHist.at(i);
+    if (!s || !g_ramHist.isFor(*s, h)) continue;
+    if (obi_ram_row(*s, line, sizeof line) > 0) out += line;
+  }
+  return out;
+}
 // User-settable friendly display name for the GATEWAY itself (Tasmota-style: blank = fall back to the
 // technical default "ObiUnlocked <gwId>"), mirroring the existing per-reader r.name. Used as the HA device
 // name in publishGatewayDiscovery(); the technical default stays available too (gateway state JSON "gw_name"
@@ -262,6 +326,11 @@ static uint32_t g_mqttLastPubMs = 0;
 static uint32_t g_mqttPubCount  = 0;
 static int      g_mqttState     = -1;
 static bool     g_mqttReconnect = false;   // set after a config change -> mqttService reconnects at once (skip the 8 s backoff)
+static String   g_mqttLastErr;             // why the last connect attempt failed: PubSubClient's state plus,
+                                            // for MQTTS, the mbedTLS error behind it. Shown in /api/status and
+                                            // the Settings page -- a broken TLS setup is otherwise invisible
+                                            // without a serial console, because the broker only ever logs its
+                                            // side of it ("bad certificate", issue #112).
 static uint32_t g_authFailCount = 0;        // wrong web logins since boot; sent as an MQTT event + in the gateway state
 static void publishAuthEvent(const String &user);   // fwd: emit a failed-login event on <base>/gateway/<gwid>/auth
 
@@ -276,6 +345,14 @@ static String uuidStr(const uint8_t *u) {
   return hex(u, 4) + "-" + hex(u + 4, 2) + "-" + hex(u + 6, 2) + "-" + hex(u + 8, 2) + "-" + hex(u + 10, 6);
 }
 static const char *typeName(uint8_t t) { return t == 0x11 ? "outlet" : "meter"; }
+// Everything currently wrong with a live reader, by the shared rule in reader_status.h -- the one place
+// the dashboard, /api/readers and MQTT all take their verdict from. Note this is a different (slower,
+// calmer) question than readerOnline() further down, which drives Home Assistant's availability flag.
+static uint8_t readerProblems(const Reader &r) {
+  if (!r.assigned) return 0;        // an unbound reader is not ours to worry about
+  return obi_reader_problems((uint32_t)((millis() - r.lastSeenMs) / 1000),
+                              r.setInterval, (r.flags & 2) != 0, r.battery_mV, r.inBootloader);
+}
 static String jnum(uint32_t v) { return obi_na(v) ? String("null") : String((unsigned long)v); }
 // power is a SIGNED int32 on the wire — it goes negative on feed-in/export. 0x7FFFFFFF still means n/a.
 static String jnumS(uint32_t v) { return obi_na(v) ? String("null") : String((long)(int32_t)v); }
@@ -324,6 +401,13 @@ static String readersJson() {
     j += ",\"rssi\":" + String((int)r.lastRssi);
     j += ",\"snr\":" + String(r.lastSnr, 1);
     j += ",\"infrared\":" + String((r.flags & 1) ? "true" : "false");
+    // the reader's OWN low-battery flag (flags b1) -- more authoritative than a voltage threshold here,
+    // and what lets the dashboard warn before the battery dies rather than after it went quiet
+    j += ",\"lowpower\":" + String((r.flags & 2) ? "true" : "false");
+    // health, decided once in the firmware (reader_status.h): `problems` is the bit mask the dashboard
+    // turns into its banner rows, `status` the single worst one, exactly as published over MQTT.
+    { uint8_t pr = readerProblems(r);
+      j += ",\"problems\":" + String(pr) + ",\"status\":" + jstr(obi_status_name(pr)); }
     j += ",\"import\":" + jnum(r.import_) + ",\"export\":" + jnum(r.export_) + ",\"power\":" + jnumS(r.power);
     j += ",\"power_calc\":" + jnumS(r.calcPower);
     j += ",\"has_data\":" + String(r.haveData ? "true" : "false");
@@ -340,10 +424,22 @@ static String readersJson() {
     j += ",\"tariff_mode\":" + String(r.tariffMode);
     j += ",\"ht_price_cent\":" + (r.htPriceCent >= 0 ? String(r.htPriceCent, 2) : String("null"));
     j += ",\"nt_price_cent\":" + (r.ntPriceCent >= 0 ? String(r.ntPriceCent, 2) : String("null"));
-    j += ",\"ht_win\":[" + String(r.htStart[0]) + "," + String(r.htEnd[0]) + "," +
-                            String(r.htStart[1]) + "," + String(r.htEnd[1]) + "]";
-    j += ",\"nt_win\":[" + String(r.ntStart[0]) + "," + String(r.ntEnd[0]) + "," +
-                            String(r.ntStart[1]) + "," + String(r.ntEnd[1]) + "]";
+    // ht_win/nt_win are the ORIGINAL whole-hour arrays, kept (rounded) for anything written against them;
+    // ht_win_min/nt_win_min carry the real minute-of-day edges the firmware works with and are what the
+    // History page prefills its HH:MM fields from. See tariff_window.h / issue #116.
+    { uint8_t hw[8];
+      obi_window_hours(r.htStart[0], r.htEnd[0], &hw[0], &hw[1]);
+      obi_window_hours(r.htStart[1], r.htEnd[1], &hw[2], &hw[3]);
+      obi_window_hours(r.ntStart[0], r.ntEnd[0], &hw[4], &hw[5]);
+      obi_window_hours(r.ntStart[1], r.ntEnd[1], &hw[6], &hw[7]);
+      j += ",\"ht_win\":[" + String(hw[0]) + "," + String(hw[1]) + "," +
+                              String(hw[2]) + "," + String(hw[3]) + "]";
+      j += ",\"nt_win\":[" + String(hw[4]) + "," + String(hw[5]) + "," +
+                              String(hw[6]) + "," + String(hw[7]) + "]"; }
+    j += ",\"ht_win_min\":[" + String(r.htStart[0]) + "," + String(r.htEnd[0]) + "," +
+                                String(r.htStart[1]) + "," + String(r.htEnd[1]) + "]";
+    j += ",\"nt_win_min\":[" + String(r.ntStart[0]) + "," + String(r.ntEnd[0]) + "," +
+                                String(r.ntStart[1]) + "," + String(r.ntEnd[1]) + "]";
     j += "}";
   }
   return j + "]";
@@ -440,7 +536,10 @@ static String statusJson() {
     j += ",\"hist_fs\":{\"ok\":" + String(g_fsOk ? "true" : "false") +
          ",\"backend\":" + jstr(g_usingOtaHist ? "ota" : "userdata") +
          ",\"total\":" + String((uint32_t)ht) + ",\"used\":" + String((uint32_t)hu) +
-         ",\"daily_total\":" + String((uint32_t)dt) + ",\"daily_used\":" + String((uint32_t)du) + "}"; }
+         ",\"daily_total\":" + String((uint32_t)dt) + ",\"daily_used\":" + String((uint32_t)du) +
+         ",\"mode\":" + String(g_histMode) +                        // 0 full, 1 daily only, 2 off
+         ",\"ram\":" + String(g_ramHist.count()) +                  // samples currently held in RAM
+         ",\"ram_cap\":" + String(g_ramHist.active() ? HIST_RAM_CAP : 0) + "}"; }
   j += ",\"freq_mhz\":869.5,\"bw_khz\":500,\"sf\":" + String(g_liveSF);   // actually-active SF, not the boot-time default
   j += ",\"mqtt\":{\"host\":" + jstr(g_mqttHost) + ",\"port\":" + String(g_mqttPort);
   j += ",\"user\":" + jstr(g_mqttUser) + ",\"topic\":" + jstr(g_mqttTopic);
@@ -449,8 +548,37 @@ static String statusJson() {
   j += ",\"enabled\":" + String(g_mqttHost[0] ? "true" : "false");
   j += ",\"connected\":" + String(con ? "true" : "false");
   j += ",\"state\":" + jstr(mqttStateText(g_mqttState));
+  j += ",\"last_err\":" + jstr(g_mqttLastErr.c_str());   // "" while it has never failed since boot
   j += ",\"pub_count\":" + String(g_mqttPubCount);
+  // What the fixed-size buffers above can actually hold (usable characters, excluding the NUL). The
+  // Settings page turns these into maxlength= and into its own warning, so the UI limit can never drift
+  // away from the firmware's.
+  j += ",\"max\":{\"host\":" + String((uint32_t)sizeof g_mqttHost - 1) +
+       ",\"user\":" + String((uint32_t)sizeof g_mqttUser - 1) +
+       ",\"pass\":" + String((uint32_t)sizeof g_mqttPass - 1) +
+       ",\"topic\":" + String((uint32_t)sizeof g_mqttTopic - 1) + "}";
   j += ",\"last_pub_s\":" + String(lastPub) + "}";
+  // Bound readers that have NOT transmitted since boot. A reader that went flat while the gateway was
+  // restarting (the hourly auto-update is enough) never gets a RAM slot, so without this it would simply
+  // be absent from the dashboard instead of raising an alert. Capped: more bound readers than this on one
+  // gateway is not a real setup, and the cap keeps it off the web task's stack.
+  { GwKnownReader known[24];
+    int nk = gw_known_readers(known, 24);
+    j += ",\"readers_missing\":[";
+    bool firstMissing = true;
+    for (int i = 0; i < nk; i++) {
+      bool live = false;
+      for (int k = 0; k < MAX_READERS; k++)
+        if (readers[k].used && !memcmp(readers[k].handle, known[i].handle, 3)) { live = true; break; }
+      if (live) continue;
+      // Not overdue yet (the gateway has only just started) -> not an alert, see obi_missing_overdue().
+      if (!obi_missing_overdue(gw_uptime_s(), known[i].interval)) continue;
+      j += String(firstMissing ? "" : ",") + "{\"id\":\"" + hex(known[i].handle, 3) +
+           "\",\"name\":" + jstr(known[i].name) +
+           ",\"iv\":" + String(known[i].interval) + "}";
+      firstMissing = false;
+    }
+    j += "]"; }
   j += ",\"auth\":{\"enabled\":" + String(g_authUser[0] ? "true" : "false") + ",\"user\":" + jstr(g_authUser) + "}";
   // reader OTA status
   uint8_t ot[3] = {0}; gw_ota_target(ot);
@@ -629,6 +757,17 @@ static void handleBoxCfg() {
 // in main.cpp. The tariff card always sends its own scheme's fields together with `mode`, but the OTHER
 // scheme's fields are simply left as whatever this reader already had saved (read back below), so switching
 // from mode 1 to 2 and back doesn't lose a previously-entered night window or HT/NT setup.
+// The eight §14a window edges (ht0s/ht0e/ht1s/ht1e/nt0s/nt0e/nt1s/nt1e) accept "HH:MM", a bare hour 0-23
+// (what they meant before quarter-hour windows existed, so older clients keep working) or bare minutes
+// since midnight -- obi_parse_minute() in tariff_window.h, which also leaves the stored value alone if the
+// field is malformed. nstart/nend (day/night scheme) remain whole hours.
+// One §14a window edge off the wire, keeping whatever is already stored when the field is absent or
+// malformed. See obi_parse_minute() in tariff_window.h for the accepted spellings.
+static uint16_t winArg(const char *name, uint16_t cur) {
+  if (!server.hasArg(name)) return cur;
+  return obi_parse_minute(server.arg(name).c_str(), cur);
+}
+
 static void handleReaderPrice() {
   String id = server.arg("id");
   if (id.length() != 6) { server.send(400, "application/json", "{\"ok\":false}"); return; }
@@ -636,7 +775,7 @@ static void handleReaderPrice() {
   for (int i = 0; i < 3; i++) h[i] = (uint8_t)strtol(id.substring(i * 2, i * 2 + 2).c_str(), nullptr, 16);
   float cent = -1, ecent = -1, nprice = -1, htprice = -1, ntprice = -1;
   bool night = false; int nstart = 22, nend = 6, mode = 0;
-  int ht0s = 0, ht0e = 0, ht1s = 0, ht1e = 0, nt0s = 0, nt0e = 0, nt1s = 0, nt1e = 0;
+  uint16_t ht0s = 0, ht0e = 0, ht1s = 0, ht1e = 0, nt0s = 0, nt0e = 0, nt1s = 0, nt1e = 0;
   for (int i = 0; i < MAX_READERS; i++)
     if (readers[i].used && !memcmp(readers[i].handle, h, 3)) {
       Reader &r = readers[i];
@@ -656,14 +795,10 @@ static void handleReaderPrice() {
   if (server.hasArg("mode")) mode = server.arg("mode").toInt();
   if (server.hasArg("htp")) htprice = server.arg("htp").toFloat();
   if (server.hasArg("ntp")) ntprice = server.arg("ntp").toFloat();
-  if (server.hasArg("ht0s")) ht0s = server.arg("ht0s").toInt();
-  if (server.hasArg("ht0e")) ht0e = server.arg("ht0e").toInt();
-  if (server.hasArg("ht1s")) ht1s = server.arg("ht1s").toInt();
-  if (server.hasArg("ht1e")) ht1e = server.arg("ht1e").toInt();
-  if (server.hasArg("nt0s")) nt0s = server.arg("nt0s").toInt();
-  if (server.hasArg("nt0e")) nt0e = server.arg("nt0e").toInt();
-  if (server.hasArg("nt1s")) nt1s = server.arg("nt1s").toInt();
-  if (server.hasArg("nt1e")) nt1e = server.arg("nt1e").toInt();
+  ht0s = winArg("ht0s", ht0s); ht0e = winArg("ht0e", ht0e);
+  ht1s = winArg("ht1s", ht1s); ht1e = winArg("ht1e", ht1e);
+  nt0s = winArg("nt0s", nt0s); nt0e = winArg("nt0e", nt0e);
+  nt1s = winArg("nt1s", nt1s); nt1e = winArg("nt1e", nt1e);
   if (cent < 0) cent = -1; else if (cent > 1000) cent = 1000;
   if (ecent < 0) ecent = -1; else if (ecent > 1000) ecent = 1000;
   if (nprice < 0) nprice = -1; else if (nprice > 1000) nprice = 1000;
@@ -672,16 +807,203 @@ static void handleReaderPrice() {
   if (nstart < 0 || nstart > 23) nstart = 22;
   if (nend < 0 || nend > 23) nend = 6;
   if (mode < 0 || mode > 2) mode = 0;
-  auto h24 = [](int v) -> uint8_t { return (uint8_t)(((v % 24) + 24) % 24); };
   if (gw_set_reader_price(h, cent, ecent, night, (uint8_t)nstart, (uint8_t)nend, nprice,
                           (uint8_t)mode, htprice, ntprice,
-                          h24(ht0s), h24(ht0e), h24(ht1s), h24(ht1e),
-                          h24(nt0s), h24(nt0e), h24(nt1s), h24(nt1e)))
+                          ht0s, ht0e, ht1s, ht1e, nt0s, nt0e, nt1s, nt1e))
     server.send(200, "application/json", "{\"ok\":true}");
   else server.send(400, "application/json", "{\"ok\":false}");
 }
 
+// ---- /api/mqtt/tlsdiag — why does MQTTS not come up? (issue #112) ---------------------------------
+// A broker's log of a failed MQTTS handshake only ever says "bad certificate": that alert is what mbedTLS
+// on THIS side sends after it rejected the broker's certificate, so the actual reason never leaves the
+// gateway. This probes the broker the way the MQTT client does, but with verification switched OFF, so the
+// chain the broker really sends can be read out -- and then verifies that chain against the configured CA
+// by hand, which yields the decoded reason (not trusted, name mismatch) instead of one opaque "connect
+// failed" -- plus the validity dates, which mbedTLS is built without checking here (see utcStampNow()).
+// Nothing here changes the stored config: host/port/ca may be posted to test values that are still being
+// typed in the form.
+static String x509TimeStr(const mbedtls_x509_time &tm) {
+  char b[28];
+  snprintf(b, sizeof b, "%04d-%02d-%02d %02d:%02d:%02d UTC", tm.year, tm.mon, tm.day, tm.hour, tm.min, tm.sec);
+  return String(b);
+}
+// YYYYMMDDhhmmss as one number, so a certificate's UTC validity window can be compared with the clock
+// without any timezone arithmetic.
+static uint64_t x509Stamp(int y, int mo, int d, int h, int mi, int s) {
+  return ((((((uint64_t)y * 100 + mo) * 100 + d) * 100 + h) * 100 + mi) * 100) + s;
+}
+static uint64_t x509Stamp(const mbedtls_x509_time &tm) {
+  return x509Stamp(tm.year, tm.mon, tm.day, tm.hour, tm.min, tm.sec);
+}
+// The date check mbedTLS itself skips: ESP-IDF builds its mbedTLS with MBEDTLS_HAVE_TIME_DATE unset, so
+// mbedtls_x509_crt_verify() ignores notBefore/notAfter entirely -- an expired broker certificate verifies
+// as good on this hardware. Doing it here keeps the diagnostic honest (and rules expiry in or out as the
+// cause of a failing MQTTS connection).
+static uint64_t utcStampNow() {
+  time_t now = time(nullptr);
+  struct tm g;
+  gmtime_r(&now, &g);
+  return x509Stamp(g.tm_year + 1900, g.tm_mon + 1, g.tm_mday, g.tm_hour, g.tm_min, g.tm_sec);
+}
+// The certificate's Subject Alternative Names, as a JSON array. This is the field that decides whether
+// connecting BY IP can ever work: mbedTLS matches the host string we dialled against the CN/SANs.
+static String x509SanJson(const mbedtls_x509_crt *c) {
+  String out = "[";
+  for (const mbedtls_x509_sequence *s = &c->subject_alt_names; s; s = s->next) {
+    if (!s->buf.p || !s->buf.len) continue;
+    int tag = s->buf.tag & MBEDTLS_ASN1_TAG_VALUE_MASK;
+    String v;
+    if (tag == MBEDTLS_X509_SAN_DNS_NAME || tag == MBEDTLS_X509_SAN_RFC822_NAME ||
+        tag == MBEDTLS_X509_SAN_UNIFORM_RESOURCE_IDENTIFIER) {
+      for (size_t i = 0; i < s->buf.len && i < 128; i++) {
+        char ch = (char)s->buf.p[i];
+        v += (ch >= 32 && ch < 127) ? ch : '?';
+      }
+    } else if (tag == MBEDTLS_X509_SAN_IP_ADDRESS && s->buf.len == 4) {
+      char b[20];
+      snprintf(b, sizeof b, "%u.%u.%u.%u", s->buf.p[0], s->buf.p[1], s->buf.p[2], s->buf.p[3]);
+      v = b;
+    } else continue;                      // other GeneralName kinds are not useful here
+    if (out.length() > 1) out += ",";
+    out += jstr(v.c_str());
+  }
+  return out + "]";
+}
+static void handleMqttTlsDiag() {
+  if (g_ghState == 1) { server.send(409, "application/json", "{\"ok\":false,\"error\":\"ota busy\"}"); return; }
+  // A second TLS session costs ~30 KB of contiguous heap while the handshake runs. Refuse up front rather
+  // than fail somewhere inside mbedTLS with an error that looks like a certificate problem.
+  if (ESP.getMaxAllocHeap() < 40 * 1024) {
+    server.send(503, "application/json", "{\"ok\":false,\"error\":\"low heap\"}");
+    return;
+  }
+  String host = server.hasArg("host") ? server.arg("host") : String(g_mqttHost);
+  host.trim();
+  int port = server.hasArg("port") ? server.arg("port").toInt() : (int)g_mqttPort;
+  String ca = (server.hasArg("ca") && server.arg("ca").length()) ? server.arg("ca") : g_mqttCa;
+  if (!host.length()) { server.send(400, "application/json", "{\"ok\":false,\"error\":\"nohost\"}"); return; }
+  if (port <= 0 || port > 65535) port = 8883;
+
+  // Plain TCP first, on its own socket: mbedTLS reports a refused connection and a timed-out handshake
+  // with the same -1, so without this step "nothing is listening there" would read like a TLS fault.
+  WiFiClient tcp;
+  tcp.setTimeout(3);
+  bool tcpOk = tcp.connect(host.c_str(), (uint16_t)port) == 1;
+  tcp.stop();
+
+  bool shook = false;
+  String why;
+  std::unique_ptr<WiFiClientSecure> probe;
+  if (tcpOk) {
+    probe.reset(new WiFiClientSecure());
+    probe->setInsecure();               // deliberately: we want the chain even when it does NOT verify
+    probe->setTimeout(5);
+    probe->setHandshakeTimeout(5);
+    shook = probe->connect(host.c_str(), (uint16_t)port) == 1;
+    if (!shook) {
+      char eb[128] = {0};
+      int le = probe->lastError(eb, sizeof eb);
+      why = le ? String(le) + ": " + eb : String("TLS handshake failed");
+      if (le == -1) why += " (handshake timed out -- is this really a TLS port?)";
+    }
+  } else {
+    why = "no TCP connection -- wrong host/port, or a firewall in between";
+  }
+
+  String j = String("{\"ok\":true,\"host\":") + jstr(host.c_str()) + ",\"port\":" + String(port) +
+             ",\"ca_set\":" + String(ca.length() ? "true" : "false") +
+             ",\"time_valid\":" + String(timeValid() ? "true" : "false") +
+             ",\"tcp\":" + String(tcpOk ? "true" : "false") +
+             ",\"handshake\":" + String(shook ? "true" : "false");
+  if (!shook) {
+    j += ",\"err\":" + jstr(why.c_str());
+    if (probe) probe->stop();
+    server.send(200, "application/json", j + "}");
+    return;
+  }
+
+  const mbedtls_x509_crt *chain = probe->getPeerCertificate();
+  j += ",\"chain\":[";
+  char buf[256];
+  int n = 0;
+  for (const mbedtls_x509_crt *c = chain; c && n < 4; c = c->next, n++) {   // a broker that sends more
+                                                                            // than four is not the problem
+    if (n) j += ",";
+    if (mbedtls_x509_dn_gets(buf, sizeof buf, &c->subject) < 0) buf[0] = 0;
+    j += String("{\"subject\":") + jstr(buf);
+    if (mbedtls_x509_dn_gets(buf, sizeof buf, &c->issuer) < 0) buf[0] = 0;
+    j += ",\"issuer\":" + jstr(buf);
+    j += ",\"from\":" + jstr(x509TimeStr(c->valid_from).c_str());
+    j += ",\"to\":" + jstr(x509TimeStr(c->valid_to).c_str());
+    if (timeValid()) {
+      uint64_t nowS = utcStampNow();
+      j += ",\"expired\":" + String(x509Stamp(c->valid_to) < nowS ? "true" : "false");
+      j += ",\"not_yet\":" + String(x509Stamp(c->valid_from) > nowS ? "true" : "false");
+    }
+    j += ",\"san\":" + x509SanJson(c) + "}";
+  }
+  j += "]";
+
+  if (!ca.length() || !chain) {
+    j += ",\"verify\":null";          // no CA stored: MQTTS would only encrypt, it would never verify
+  } else {
+    mbedtls_x509_crt trust;
+    mbedtls_x509_crt_init(&trust);
+    // +1: mbedtls_x509_crt_parse() only recognises PEM when the length includes the terminating NUL.
+    int pr = mbedtls_x509_crt_parse(&trust, (const unsigned char *)ca.c_str(), ca.length() + 1);
+    j += ",\"ca_parse\":" + String(pr);
+    if (pr != 0) {
+      j += ",\"verify\":null";        // the pasted CA is not a readable certificate at all
+    } else {
+      uint32_t flags = 0;
+      int vr = mbedtls_x509_crt_verify((mbedtls_x509_crt *)chain, &trust, nullptr, host.c_str(),
+                                       &flags, nullptr, nullptr);
+      j += ",\"verify\":{\"ok\":" + String(vr == 0 ? "true" : "false") + ",\"flags\":" + String(flags) +
+           ",\"reasons\":[";
+      char vi[320] = {0};
+      mbedtls_x509_crt_verify_info(vi, sizeof vi, "", flags);   // one reason per line
+      String cur;
+      bool first = true;
+      for (const char *q = vi; *q; q++) {
+        if (*q == '\n') {
+          if (cur.length()) { if (!first) j += ","; j += jstr(cur.c_str()); first = false; }
+          cur = "";
+        } else if (*q != '\r') cur += *q;
+      }
+      if (cur.length()) { if (!first) j += ","; j += jstr(cur.c_str()); }
+      j += "]}";
+    }
+    mbedtls_x509_crt_free(&trust);
+  }
+  probe->stop();
+  server.send(200, "application/json", j + "}");
+}
+
+// Every text field here lands in a fixed-size buffer, and strlcpy() would cut it to fit WITHOUT saying
+// so. For a password that is the worst possible failure mode: the save reports success, the broker then
+// refuses the connection, and nothing in the UI connects the two (reported from the field: a password of
+// 32 characters or more failed "silently" -- the buffer held 31). So the lengths are checked first and an
+// over-long field rejects the whole save, naming the field and its limit; nothing is stored or applied.
+// The buffers are much larger now too, so this should only ever fire on a genuinely extreme value.
+static bool mqttArgFits(const char *name, size_t cap, const char *label, String &err) {
+  if (!server.hasArg(name)) return true;
+  size_t n = server.arg(name).length();
+  if (n < cap) return true;
+  err = String(label) + ": " + String((uint32_t)n) + " > " + String((uint32_t)cap - 1);
+  return false;
+}
+
 static void handleMqttCfg() {
+  String err;
+  if (!mqttArgFits("host",  sizeof g_mqttHost,  "host",     err) ||
+      !mqttArgFits("user",  sizeof g_mqttUser,  "user",     err) ||
+      !mqttArgFits("pass",  sizeof g_mqttPass,  "password", err) ||
+      !mqttArgFits("topic", sizeof g_mqttTopic, "topic",    err)) {
+    Serial.printf("[mqtt] config rejected — %s\n", err.c_str());
+    server.send(400, "application/json", "{\"ok\":false,\"err\":" + jstr(err.c_str()) + "}");
+    return;
+  }
   if (server.hasArg("host")) strlcpy(g_mqttHost, server.arg("host").c_str(), sizeof g_mqttHost);
   if (server.hasArg("port")) g_mqttPort = server.arg("port").toInt();
   if (server.hasArg("user")) strlcpy(g_mqttUser, server.arg("user").c_str(), sizeof g_mqttUser);
@@ -858,6 +1180,23 @@ static void handleNumFmt() {
     } else { server.send(400, "application/json", "{\"ok\":false,\"err\":\"fmt\"}"); return; }
   }
   server.send(200, "application/json", String("{\"ok\":true,\"fmt\":") + g_numFmt + "}");
+}
+
+// How much of the history goes to flash: 0 = full, 1 = daily rows only, 2 = nothing (see g_histMode).
+// Takes effect immediately -- nothing is deleted either way, so switching back and forth just stops and
+// resumes the writes, and whatever is already stored stays readable.
+static void handleHistMode() {
+  if (server.hasArg("mode")) {
+    int m = server.arg("mode").toInt();
+    if (m < 0 || m > 2) { server.send(400, "application/json", "{\"ok\":false,\"err\":\"mode\"}"); return; }
+    g_histMode = (uint8_t)m;
+    prefs.begin("obigw", false); prefs.putUChar("histmode", g_histMode); prefs.end();
+    histRamEnable(g_histMode != 0);
+    Serial.printf("[hist] storage mode %u (%s)\n", g_histMode,
+                  g_histMode == 0 ? "full" : (g_histMode == 1 ? "daily rows only" : "off"));
+  }
+  server.send(200, "application/json", String("{\"ok\":true,\"mode\":") + g_histMode +
+                                        ",\"ram\":" + g_ramHist.count() + "}");
 }
 
 // Dashboard cosmetic: hide unbound (pending) reader cards. Global (not per-reader), persisted in NVS like
@@ -1835,8 +2174,12 @@ static String withDailyRow(String all, uint32_t dayStart, uint32_t imp, uint32_t
   return content;
 }
 
+// Writes one daily row (read-modify-write of the whole, tiny /d<id> file). Silenced in storage mode 2
+// -- the "nothing on flash" mode -- which is the only writer left once the raw-sample log is off; see
+// g_histMode for what skipping it costs. Mode 1 keeps writing: one row per reader per day.
 static void persistDaily(const String &id, uint32_t dayStart, uint32_t imp, uint32_t exp,
                           uint32_t dayWh, uint32_t nightWh, uint32_t htWh, uint32_t stWh, uint32_t ntWh) {
+  if (g_histMode >= 2 || !g_fsOk) return;
   String path = fpD(id);
   fsWrite(path, withDailyRow(fsRead(path), dayStart, imp, exp, dayWh, nightWh, htWh, stWh, ntWh, dailyCapBytes()));
 }
@@ -1948,32 +2291,30 @@ static void beginDay(int slot, const String &id, uint32_t dayStart) {
   d.htWh = 0; d.stWh = 0; d.ntWh = 0;      // ...and the live HT/ST/NT split fresh
 }
 
-// Is hour `h` (0-23) inside the [s,e) window? A degenerate window (s==e) is "unused"/always false -- shared
-// convention for every hour-window field in this file (nightStartHour/nightEndHour, htStart/htEnd,
-// ntStart/ntEnd). Wraps past midnight when s >= e (e.g. 22..6 means "22:00 through 05:59").
-static bool inHourWindow(uint8_t s, uint8_t e, int h) {
-  if (s == e) return false;
-  return s < e ? (h >= s && h < e) : (h >= s || h < e);
+// Minute of the local day (0..1439) for `now` -- the resolution every tariff window is evaluated at, so a
+// §14a window can start or end on a quarter hour (issue #116). The windows themselves and the [s,e)/wrap/
+// unused rules live in tariff_window.h, shared with the host tests.
+static uint16_t localMinuteOfDay(time_t now) {
+  struct tm lt; localtime_r(&now, &lt);
+  return (uint16_t)(lt.tm_hour * 60 + lt.tm_min);
 }
 
 // Is `now` inside reader `r`'s configured night window? Off (always "day") unless nightTariffOn.
+// The day/night window is still configured in whole hours -- only the §14a windows needed finer steps --
+// so its edges are scaled to minutes here rather than stored that way.
 static bool isNightNow(const Reader &r, time_t now) {
   if (!r.nightTariffOn) return false;
-  struct tm lt; localtime_r(&now, &lt);
-  return inHourWindow(r.nightStartHour, r.nightEndHour, lt.tm_hour);
+  return obi_in_window((uint16_t)(r.nightStartHour * 60), (uint16_t)(r.nightEndHour * 60),
+                        localMinuteOfDay(now));
 }
 
 // Which §14a Modul-3 zone `now` falls into for reader `r` (tariffMode==2 only -- caller checks that).
 // HT is checked before NT, so a misconfigured overlap resolves to the (usually pricier) HT zone rather than
 // silently favoring NT; ST is the fallback for "in neither window", exactly like the day rate is "not in the
 // night window" above.
-enum TariffZone : uint8_t { ZONE_ST = 0, ZONE_HT = 1, ZONE_NT = 2 };
+enum TariffZone : uint8_t { ZONE_ST = OBI_ZONE_ST, ZONE_HT = OBI_ZONE_HT, ZONE_NT = OBI_ZONE_NT };
 static TariffZone tariffZoneNow(const Reader &r, time_t now) {
-  struct tm lt; localtime_r(&now, &lt);
-  int h = lt.tm_hour;
-  for (int i = 0; i < 2; i++) if (inHourWindow(r.htStart[i], r.htEnd[i], h)) return ZONE_HT;
-  for (int i = 0; i < 2; i++) if (inHourWindow(r.ntStart[i], r.ntEnd[i], h)) return ZONE_NT;
-  return ZONE_ST;
+  return (TariffZone)obi_zone_at(r.htStart, r.htEnd, r.ntStart, r.ntEnd, localMinuteOfDay(now));
 }
 
 // Short machine-readable name for whatever zone reader `r` is in right now, across all three tariff
@@ -2040,8 +2381,11 @@ static bool readerTodayStats(int slot, const Reader &r, float &todayWh, float &t
 // pipeline that ever sees consumption tagged with a real time-of-day -- the raw sample log this could
 // otherwise be reconstructed from is short-retention, so this can't be done retroactively later.
 static void historyService() {
-  if (!g_fsOk || !timeValid() || otaHist_writesPaused()) return;   // paused around a firmware flash --
-                                                                     // see otaHist_prepareForFlash()
+  if (!timeValid()) return;
+  // The reduced storage modes still need this loop running -- it is what accumulates the day/zone split
+  // and feeds the RAM ring -- so only the flash-writing mode is gated on the stores being writable
+  // (paused around a firmware flash, see otaHist_prepareForFlash()).
+  if (g_histMode == 0 && (!g_fsOk || otaHist_writesPaused())) return;
   static uint32_t lastPoll = 0;
   uint32_t now = millis();
   if (now - lastPoll < 1000) return;
@@ -2077,8 +2421,9 @@ static void historyService() {
     if (!(firstLog || changed || heartbeat)) continue;
     if (!firstLog && (now - hLastMs[i] < 30000)) continue;   // min 30 s spacing between samples
     if (!id.length()) id = hex(r.handle, 3);
-    appendSample(id, (uint32_t)tnow, r.import_, exp, r.power);   // exp, not r.export_ -- a void export must
-                                                                  // never leak its raw sentinel into the log
+    // exp, not r.export_ -- a void export must never leak its raw sentinel into the log
+    if (g_histMode == 0) appendSample(id, (uint32_t)tnow, r.import_, exp, r.power);
+    else                 g_ramHist.push(r.handle, (uint32_t)tnow, r.import_, exp, r.power);
     hImp[i] = r.import_; hLastMs[i] = now;
   }
 }
@@ -2211,10 +2556,15 @@ static void handleHistoryApi() {
                      ",\"night_on\":" + (nightOn ? "true" : "false") +
                      ",\"night_start\":" + String(nightStart) + ",\"night_end\":" + String(nightEnd) +
                      ",\"night_price\":" + String(nightPriceCent, 2) +
+                     ",\"hist_mode\":" + String(g_histMode) +
                      ",\"tariff_mode\":" + String(tariffMode) +
                      ",\"ht_price\":" + String(htPriceCent, 2) +
                      ",\"nt_price\":" + String(ntPriceCent, 2) + ",\"samples\":[");
-  { String s = g_fsOk ? fsRead(fpS(id)) : String(); streamRows(s); }
+  // Whatever is on flash first (older), then the RAM ring (newer, collected since storage was turned
+  // down) -- the two never overlap, so the result stays in chronological order.
+  { String s = g_fsOk ? fsRead(fpS(id)) : String();
+    if (g_histMode != 0) s += ramSamplesCsv(id);
+    streamRows(s); }
   server.sendContent("],\"daily\":[");
   {
     String d = g_fsOk ? fsRead(fpD(id)) : String();
@@ -2586,9 +2936,9 @@ static void handleHistoryCsv() {
   server.sendHeader("Content-Disposition",
                      String("attachment; filename=\"obi_") + id + (daily ? "_daily.csv\"" : "_raw.csv\""));
   server.send(200, "text/csv", "");
-  if (g_fsOk) {
+  if (g_fsOk || g_histMode != 0) {
     if (daily) {
-      String d = fsRead(fpD(id));
+      String d = g_fsOk ? fsRead(fpD(id)) : String();
       for (int i = 0; i < MAX_READERS; i++)
         if (hDaily[i].day && readers[i].used && hex(readers[i].handle, 3) == id) {
           d = withDailyRow(d, hDaily[i].day, hDaily[i].imp, hDaily[i].exp, hDaily[i].dayWh, hDaily[i].nightWh,
@@ -2597,7 +2947,11 @@ static void handleHistoryCsv() {
         }
       sendCsvRows(d, "date,day_start_epoch,import_wh,export_wh,day_wh,night_wh,ht_wh,st_wh,nt_wh");
     } else {
-      sendCsvRows(fsRead(fpS(id)), "date,epoch,import_wh,export_wh,power_w");
+      // same two sources as /api/history: whatever is on flash, then the RAM ring, so an export never
+      // silently omits the samples the page is showing (see g_histMode / ramSamplesCsv()).
+      String s = g_fsOk ? fsRead(fpS(id)) : String();
+      if (g_histMode != 0) s += ramSamplesCsv(id);
+      sendCsvRows(s, "date,epoch,import_wh,export_wh,power_w");
     }
   }
   server.sendContent("");                                 // terminate the chunked response
@@ -2605,6 +2959,14 @@ static void handleHistoryCsv() {
 
 static void handleHistoryClear() {
   String id = server.arg("id");
+  if (id.length() == 6) {
+    // also drop this reader's samples from the RAM ring, or a cleared chart would immediately fill up
+    // again from memory (no-op when the ring isn't allocated)
+    String lid = id; lid.toLowerCase();
+    uint8_t rh[3];
+    for (int i = 0; i < 3; i++) rh[i] = (uint8_t)strtol(lid.substring(i * 2, i * 2 + 2).c_str(), nullptr, 16);
+    g_ramHist.forget(rh);
+  }
   if (id.length() == 6 && g_fsOk) {
     id.toLowerCase();
     remove(fpS(id).c_str());
@@ -2659,6 +3021,7 @@ static void startServices() {
   server.on("/api/status", guard(handleStatus));
   server.on("/api/interval", HTTP_POST, guard(handleInterval));
   server.on("/api/mqtt", HTTP_POST, guard(handleMqttCfg));
+  server.on("/api/mqtt/tlsdiag", HTTP_POST, guard(handleMqttTlsDiag));
   server.on("/api/auth", HTTP_POST, guard(handleAuthCfg));   // set web Basic Auth user/pass
   server.on("/api/appass", HTTP_POST, guard(handleApPassword));  // set the setup-hotspot AP password
   server.on("/api/aplimit", HTTP_POST, guard(handleApLimit));    // setup AP only after boot / button tap
@@ -2666,6 +3029,7 @@ static void startServices() {
   server.on("/api/tz",   HTTP_POST, guard(handleTz));       // set the timezone (history day-buckets)
   server.on("/api/night_mode", HTTP_POST, guard(handleNightMode)); // disable normal-operation LED activity
   server.on("/api/numfmt", HTTP_POST, guard(handleNumFmt));        // number format: 0=auto 1=EU 2=US
+  server.on("/api/histmode", HTTP_POST, guard(handleHistMode));    // history storage: 0=full 1=daily 2=off
   server.on("/api/hideunbound", HTTP_POST, guard(handleHideUnbound)); // dashboard: hide unbound reader cards
   server.on("/api/lora/sf", HTTP_POST, guard(handleLoraSF));          // LoRa spreading factor (7/9) -- reboot required
   server.on("/api/wifi", HTTP_POST, guard(handleWifiPortal));        // open the on-demand WiFiManager portal (AP)
@@ -2853,6 +3217,11 @@ static String authTopic()    { return gwStateTopic() + "/auth"; }
 static String updTopic()     { return gwStateTopic() + "/update"; }
 static String installTopic() { return updTopic() + "/install"; }
 static String rdrAvtTopic(const String &id) { return String(g_mqttTopic) + "/" + id + "/status"; }
+// Health is its OWN topic rather than a field of the state JSON, because the state JSON is only published
+// when a fresh energy frame arrives -- which is exactly what stops happening when a reader dies. Retained,
+// so Home Assistant has the last word immediately after a restart. ("/status" was already taken by the
+// availability flag above.)
+static String rdrHealthTopic(const String &id) { return String(g_mqttTopic) + "/" + id + "/health"; }
 
 // State of the HA update entity, in the JSON format HA's MQTT update platform reads from its state topic.
 // latest_version is left out until a GitHub check has found a release for this board -- HA then keeps the
@@ -3045,6 +3414,14 @@ static void publishDiscovery(const Reader &r) {
     mqtt.publish(topic.c_str(), p.c_str(), true);
   }
 
+  // Health: its own topic (see rdrHealthTopic) rather than the state JSON, so it updates when the reader
+  // goes quiet. Deliberately NOT marked diagnostic -- this is the entity an automation watches.
+  { String t = "homeassistant/sensor/" + uid + "/health/config";
+    String p = "{\"name\":\"Status\",\"uniq_id\":\"" + uid + "_health\",\"stat_t\":\"" +
+               rdrHealthTopic(id) + "\",\"icon\":\"mdi:heart-pulse\""
+               ",\"avty_t\":\"" + avtTopic() + "\"," + dev + "}";   // gateway availability only: the reader's
+    mqtt.publish(t.c_str(), p.c_str(), true); }                      // own flag would hide the bad news
+
   // --- binary sensors (all diagnostic) ---
   struct BDef { const char *key, *name, *field; };
   static const BDef bdefs[] = {
@@ -3084,6 +3461,22 @@ static void publishDiscovery(const Reader &r) {
   mqtt.publish(stopic.c_str(), sp.c_str(), true);
 }
 
+// Bound readers that are overdue and have not been heard from at all since the gateway booted. Together
+// with the live readers' own problems this makes up readers_problem on the gateway's state topic, so a
+// single Home Assistant automation can watch the whole house instead of one entity per reader -- and so a
+// reader that vanished with the last restart (no live slot, hence no per-reader topic of its own) is still
+// counted somewhere.
+static int gwMissingCount() {
+  GwKnownReader known[24];
+  int nk = gw_known_readers(known, 24), n = 0;
+  for (int i = 0; i < nk; i++) {
+    bool live = false;
+    for (int k = 0; k < MAX_READERS; k++)
+      if (readers[k].used && !memcmp(readers[k].handle, known[i].handle, 3)) { live = true; break; }
+    if (!live && obi_missing_overdue(gw_uptime_s(), known[i].interval)) n++;
+  }
+  return n;
+}
 // HA discovery for the GATEWAY itself (temperature sensor + a restart button), keyed by MAC/gwid so
 // multiple gateways appear as separate devices.
 static void publishGatewayDiscovery() {
@@ -3101,6 +3494,12 @@ static void publishGatewayDiscovery() {
   { String t = "homeassistant/sensor/" + uid + "/fw/config";
     String p = "{\"name\":\"Firmware\",\"uniq_id\":\"" + uid + "_fw\",\"stat_t\":\"" + stt +
                "\",\"val_tpl\":\"{{ value_json.fw.version }} ({{ value_json.fw.target }})\",\"icon\":\"mdi:chip\",\"ent_cat\":\"diagnostic\"" + availa + "," + dev + "}";
+    mqtt.publish(t.c_str(), p.c_str(), true); }
+  // readers in trouble (the one entity to put an automation on)
+  { String t = "homeassistant/sensor/" + uid + "/rproblem/config";
+    String p = "{\"name\":\"Reader problems\",\"uniq_id\":\"" + uid + "_rproblem\",\"stat_t\":\"" + stt +
+               "\",\"val_tpl\":\"{{ value_json.readers_problem }}\",\"icon\":\"mdi:alert-circle-outline\""
+               ",\"stat_cla\":\"measurement\"" + availa + "," + dev + "}";
     mqtt.publish(t.c_str(), p.c_str(), true); }
   // temperature
   { String t = "homeassistant/sensor/" + uid + "/temp/config";
@@ -3180,6 +3579,7 @@ static void clearDiscovery(const String &id) {
   String t = "homeassistant/number/" + uid + "/interval/config"; mqtt.publish(t.c_str(), "", true);
   String ts = "homeassistant/select/" + uid + "/interval_preset/config"; mqtt.publish(ts.c_str(), "", true);
   mqtt.publish(rdrAvtTopic(id).c_str(), "", true);   // clear the retained online/offline flag as well
+  mqtt.publish(rdrHealthTopic(id).c_str(), "", true);   // ...and the retained health verdict
 }
 
 // Web button: drop a (phantom) reader from the list. Not a permanent block — the next valid
@@ -3230,8 +3630,22 @@ static void mqttService() {
       unl_mqtt_reset();                                         // ObiUnlocked: re-announce selected devices
       g_updPubDirty = true;                                     // (re)assert the update state, see below
       for (int i = 0; i < MAX_READERS; i++) { readers[i].mqttDiscovered = false;   // re-announce after (re)connect
-                                              readers[i].mqttAvail = -1; }         // ...and re-assert online/offline
+                                              readers[i].mqttAvail = -1;           // ...and re-assert online/offline
+                                              readers[i].mqttHealth = 0xFF; }      // ...and the health verdict
       Serial.printf("[mqtt] connected as %s, subscribed %s + reboot\n", cid.c_str(), sub.c_str());
+      g_mqttLastErr = "";
+    } else {
+      // One line that says what actually went wrong. For MQTTS the interesting part is mbedTLS's own
+      // error (negative code), because PubSubClient only ever reports "connect failed" for a rejected
+      // certificate, a name mismatch and an expired cert alike -- see /api/mqtt/tlsdiag for the detail.
+      g_mqttLastErr = mqttStateText(mqtt.state());
+      if (g_mqttTls) {
+        char eb[128] = {0};
+        int le = netTls.lastError(eb, sizeof eb);
+        if (le) g_mqttLastErr += String(" | TLS ") + le + ": " + eb;
+      }
+      Serial.printf("[mqtt] connect to %s:%u failed: %s\n", g_mqttHost, (unsigned)g_mqttPort,
+                    g_mqttLastErr.c_str());
     }
     g_mqttState = mqtt.state();
   }
@@ -3270,6 +3684,9 @@ static void mqttService() {
       lastPub = now;
       { int rcAll = 0, rcBound = 0;
         for (int i = 0; i < MAX_READERS; i++) if (readers[i].used) { rcAll++; if (readers[i].assigned) rcBound++; }
+        int nMissing = gwMissingCount(), nProblem = nMissing;     // one pass, not one per JSON field
+        for (int i = 0; i < MAX_READERS; i++)
+          if (readers[i].used && readers[i].assigned && readerProblems(readers[i])) nProblem++;
         float t = gwTempC();
         String gp = "{\"mac\":\"" + String(gwMac()) + "\",\"gw\":\"" + String(gwId()) + "\""
                     ",\"gw_name\":\"ObiUnlocked " + String(gwId()) + "\"" +   // original/technical name -- ALWAYS sent, even after a custom rename (see publishGatewayDiscovery's "dev.name")
@@ -3281,6 +3698,8 @@ static void mqttService() {
                     ",\"readers\":" + String(rcAll) +
                     ",\"readers_all\":" + String(rcAll) +
                     ",\"readers_bound\":" + String(rcBound) +
+                    ",\"readers_problem\":" + String(nProblem) +   // one number to alert on
+                    ",\"readers_missing\":" + String(nMissing) +   // bound, overdue, never seen
                     ",\"auth_fail_count\":" + String(g_authFailCount) + "," + fwJson() + "}";
         if (mqtt.publish(gwStateTopic().c_str(), gp.c_str(), true)) { g_mqttPubCount++; g_mqttLastPubMs = now; } }
     }
@@ -3291,6 +3710,18 @@ static void mqttService() {
     for (int i = 0; i < MAX_READERS; i++) {
       Reader &r = readers[i];
       if (!r.used || !r.haveData) continue;
+      // Health FIRST, ahead of the "nothing new to say" shortcuts below: "no signal" is precisely the
+      // case where no frame is coming, and after an MQTT reconnect a reader that went quiet in the
+      // meantime would otherwise keep its stale retained "ok" (no fresh frame, no re-announce).
+      // Only publishes when the verdict changes, so a healthy reader costs one message, not one per pass.
+      { uint8_t pr = readerProblems(r);
+        if (r.mqttHealth != pr) {
+          r.mqttHealth = pr;
+          String ht = rdrHealthTopic(hex(r.handle, 3));
+          if (mqtt.publish(ht.c_str(), obi_status_name(pr), true)) { g_mqttPubCount++; g_mqttLastPubMs = now; }
+          Serial.printf("[mqtt] reader %02X%02X%02X health -> %s\n", r.handle[0], r.handle[1], r.handle[2],
+                        obi_status_name(pr));
+        } }
       bool fresh = (r.lastEnergyMs != r.mqttPubEnergyMs);   // a new energy frame arrived since the last publish
       if (!r.mqttDiscovered && !fresh) continue;            // never announced and nothing new -> nothing to do
       if (!r.mqttDiscovered) { publishDiscovery(r); r.mqttDiscovered = true; r.mqttAvail = -1; }
@@ -3352,6 +3783,7 @@ static void mqttService() {
         "\"interval\":%u,\"age_s\":%lu,"
         "\"today_wh\":%s,\"today_exp_wh\":%s,\"today_cost\":%s,\"today_earn\":%s,"
         "\"tariff_mode\":%u,\"tariff_zone\":\"%s\",\"tariff_rate_cent\":%s,"
+        "\"status\":\"%s\","
         "\"day_wh\":%lu,\"night_wh\":%lu,\"ht_wh\":%lu,\"st_wh\":%lu,\"nt_wh\":%lu}",
         id.c_str(), uuidBuf, typeName(r.devType), r.battery_mV, (int)r.lastRssi, (double)r.lastSnr,
         (r.flags & 1) ? "true" : "false", impBuf, expBuf, pwBuf, pwcBuf,
@@ -3360,6 +3792,7 @@ static void mqttService() {
         r.setInterval, (unsigned long)((millis() - r.lastSeenMs) / 1000),
         todayWhBuf, todayExpBuf, todayCostBuf, todayEarnBuf,
         r.tariffMode, tv ? tariffZoneName(r, tnow) : "n/a", rateBuf,
+        obi_status_name(readerProblems(r)),
         (unsigned long)hDaily[i].dayWh, (unsigned long)hDaily[i].nightWh,
         (unsigned long)hDaily[i].htWh, (unsigned long)hDaily[i].stWh, (unsigned long)hDaily[i].ntWh);
       if (n > 0 && n < (int)sizeof p && mqtt.publish(topic.c_str(), p)) {
@@ -3512,6 +3945,9 @@ static void webTask(void *) {
   g_nightMode = prefs.getBool("nightmode", false);
   g_hideUnbound = prefs.getBool("hideunb", false);
   g_numFmt = prefs.getUChar("numfmt", 0);
+  g_histMode = prefs.getUChar("histmode", 0);   // see g_histMode: 0 = everything on flash, as before
+  if (g_histMode > 2) g_histMode = 0;
+  histRamEnable(g_histMode != 0);   // the ring is RAM, so a stored non-zero mode has to re-create it here
   prefs.getString("gwname", "").toCharArray(g_gwName, sizeof g_gwName);
   g_staticIpOn = prefs.getBool("sipon", false);
   prefs.getString("sip",   "").toCharArray(g_staticIp,   sizeof g_staticIp);
@@ -3670,6 +4106,7 @@ void web_factory_reset() {
   { Preferences p; p.begin("obiuuid",   false); p.clear(); p.end(); }   // stored reader UUIDs
   { Preferences p; p.begin("obiassign", false); p.clear(); p.end(); }   // reader bindings (assigned/bound)
   { Preferences p; p.begin("obiival",   false); p.clear(); p.end(); }   // per-reader upload intervals
+  { Preferences p; p.begin("obikey",    false); p.clear(); p.end(); }   // per-reader TEA keys (ECDH result)
   if (g_fsOk) { LittleFS.format(); if (g_usingOtaHist) otaHist_format(); }  // wipe daily (always userdata) + raw
   Serial.println("[web] factory reset: WiFi + MQTT + login + bound readers + history cleared");
 }

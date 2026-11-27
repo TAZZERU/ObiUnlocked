@@ -31,6 +31,7 @@
 #include "bthome_ble.h"
 #include "unl.h"
 #include <Preferences.h>
+#include <nvs.h>                  // enumerate the "obiassign" keys -- see gw_known_readers()
 
 // ---- reversed OBI radio configuration --------------------------------------
 #define OBI_FREQ_MHZ   869.5f
@@ -104,13 +105,57 @@ static bool loadUuid(const uint8_t h[3], uint8_t uuid[16]) {
   return n == 16;
 }
 
+// The per-reader TEA key from the ECDH exchange, persisted in NVS keyed by handle like the UUID above.
+// Without this it lives in RAM only: after every reboot or firmware update haveKey is false for every
+// reader, and since both ack builders bail on !haveKey (see sendEnergyAck/sendLegacyAck) a bound 1.2.x
+// reader then gets no ack at all -- no interval push either -- until it announces again and redoes the
+// ECDH. That costs a battery-powered reader an extra pairing round on every restart and can need a manual
+// re-bind if its announce never lands in our window. Our own ECDH keypair is regenerated on each boot
+// (obi_ecdh_generate() in setup()), so the shared secret cannot be recomputed afterwards -- the derived
+// 16-byte key is the only thing that CAN be kept.
+// Stored as key[16] + softver + hardver: those two version bytes are what lets a restored key be checked
+// against a reader whose payload carries no CRC (see the legacy gate in handleFrame()).
+// NOTE: a stored key is readable by anyone who can reach the dashboard (NVS is not encrypted and /debug
+// offers a flash dump) and it authenticates our acks -- same class of secret as the WiFi/MQTT credentials
+// already in NVS, and the reason it is kept only for readers actually bound to this gateway.
+// Local Preferences per call for the same cross-core reason as saveAssigned() below.
+static void saveKey(const uint8_t h[3], const uint8_t key[16], uint8_t softver, uint8_t hardver) {
+  char k[8]; uuidKey(h, k);
+  uint8_t blob[18];
+  memcpy(blob, key, 16); blob[16] = softver; blob[17] = hardver;
+  Preferences p; p.begin("obikey", false);
+  p.putBytes(k, blob, sizeof blob);
+  p.end();
+}
+static bool loadKey(const uint8_t h[3], uint8_t key[16], uint8_t *softver, uint8_t *hardver) {
+  char k[8]; uuidKey(h, k);
+  uint8_t blob[18] = {0};
+  Preferences p; p.begin("obikey", true);
+  size_t n = p.getBytes(k, blob, sizeof blob); p.end();
+  if (n != sizeof blob) return false;
+  memcpy(key, blob, 16); *softver = blob[16]; *hardver = blob[17];
+  return true;
+}
+static void eraseKey(const uint8_t h[3]) {
+  char k[8]; uuidKey(h, k);
+  Preferences p; p.begin("obikey", false); p.remove(k); p.end();
+}
+
 // Which readers the user has accepted onto THIS gateway (persisted). Until a reader is assigned it is
 // only tracked/shown (greyed) and NOT bound or key-exchanged, so two gateways don't fight over it.
 // NOTE: use a LOCAL Preferences per call — saveAssigned runs on the web task (core 0) while loadAssigned
 // runs on the LoRa task (core 1); a shared Preferences object's begin() returns false when already open on
 // the other core, so the write would silently hit a read-only/closed handle and never persist.
+//
+// Separately: g_knownDirty below is set whenever something the bound-reader cache holds is written
+// (binding, name, interval). It is written from either core -- the LoRa task auto-assigns during a pair
+// window -- but it is only ever a plain bool, and the cache itself is read and refilled on the main/web
+// task alone (see gw_known_readers()).
+static volatile bool g_knownDirty = true;
+
 static void saveAssigned(const uint8_t h[3], bool on) {
   char k[8]; uuidKey(h, k);
+  g_knownDirty = true;
   Preferences p; p.begin("obiassign", false);
   if (on) p.putBool(k, true); else p.remove(k);
   p.end();
@@ -128,6 +173,7 @@ static bool loadAssigned(const uint8_t h[3]) {
 // Local Preferences per call for the same cross-core reason as saveAssigned (web task core 0 / LoRa core 1).
 static void saveInterval(const uint8_t h[3], uint16_t secs) {
   char k[8]; uuidKey(h, k);
+  g_knownDirty = true;
   Preferences p; p.begin("obiival", false);
   if (secs) p.putUShort(k, secs); else p.remove(k);
   p.end();
@@ -142,6 +188,7 @@ static uint16_t loadInterval(const uint8_t h[3]) {
 // Per-reader friendly name, persisted like the interval so it survives reboot AND re-pair.
 static void saveName(const uint8_t h[3], const char *name) {
   char k[8]; uuidKey(h, k);
+  g_knownDirty = true;
   Preferences p; p.begin("obiname", false);
   if (name && name[0]) p.putString(k, name); else p.remove(k);
   p.end();
@@ -173,7 +220,11 @@ static void loadBoxCfg(const uint8_t h[3], char *out, size_t outsz) {
 // Per-reader price override + day/night tariff + §14a HT/ST/NT tariff, packed as one CSV string (like
 // boxcfg) so the whole set stays atomic: "priceCent,exportCent,nightOn,nightStart,nightEnd,nightPriceCent,
 // tariffMode,htPriceCent,ntPriceCent,ht0s,ht0e,ht1s,ht1e,nt0s,nt0e,nt1s,nt1e" (17 fields; the first 6 are the
-// original day/night-only format). Survives reboot AND re-pair, same as name/boxcfg.
+// original day/night-only format), followed by the same 8 HT/NT window edges again as MINUTES since
+// midnight (25 fields in total). The windows are stored twice on purpose: minutes are what the firmware
+// actually uses, while the hour fields in slots 10-17 stay a rounded approximation purely so a DOWNGRADE to
+// a firmware that predates quarter-hour windows (issue #116) still finds a sane whole-hour config instead of
+// reading 645 as an hour. Survives reboot AND re-pair, same as name/boxcfg.
 // Backward/forward compat: loadPriceCfg() accepts any prefix of these fields (sscanf just stops matching
 // once the string runs out, and every field already has a sane default), so a blob written by an OLDER
 // firmware (only the first 6 fields) loads fine -- tariffMode defaults to 0 and gets derived from the old
@@ -182,11 +233,18 @@ static void loadBoxCfg(const uint8_t h[3], char *out, size_t outsz) {
 // HT/ST/NT exists in the first place).
 static void savePriceCfg(const uint8_t h[3], const Reader &r) {
   char k[8]; uuidKey(h, k);
-  char buf[140];
-  snprintf(buf, sizeof buf, "%.2f,%.2f,%d,%u,%u,%.2f,%u,%.2f,%.2f,%u,%u,%u,%u,%u,%u,%u,%u",
+  uint8_t hh[8];   // the rounded hour approximation for the legacy slots (see the note above)
+  obi_window_hours(r.htStart[0], r.htEnd[0], &hh[0], &hh[1]);
+  obi_window_hours(r.htStart[1], r.htEnd[1], &hh[2], &hh[3]);
+  obi_window_hours(r.ntStart[0], r.ntEnd[0], &hh[4], &hh[5]);
+  obi_window_hours(r.ntStart[1], r.ntEnd[1], &hh[6], &hh[7]);
+  char buf[220];
+  snprintf(buf, sizeof buf,
+           "%.2f,%.2f,%d,%u,%u,%.2f,%u,%.2f,%.2f,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u",
            r.priceCentOverride, r.exportCentOverride, r.nightTariffOn ? 1 : 0,
            r.nightStartHour, r.nightEndHour, r.nightPriceCent,
            r.tariffMode, r.htPriceCent, r.ntPriceCent,
+           hh[0], hh[1], hh[2], hh[3], hh[4], hh[5], hh[6], hh[7],
            r.htStart[0], r.htEnd[0], r.htStart[1], r.htEnd[1],
            r.ntStart[0], r.ntEnd[0], r.ntStart[1], r.ntEnd[1]);
   Preferences p; p.begin("obiprice", false); p.putString(k, buf); p.end();
@@ -194,7 +252,7 @@ static void savePriceCfg(const uint8_t h[3], const Reader &r) {
 static void loadPriceCfg(const uint8_t h[3], Reader &r) {
   char k[8]; uuidKey(h, k);
   Preferences p; p.begin("obiprice", true);
-  char buf[140]; buf[0] = 0;
+  char buf[220]; buf[0] = 0;
   p.getString(k, buf, sizeof buf);
   p.end();
   r.priceCentOverride = -1; r.exportCentOverride = -1; r.nightTariffOn = false;
@@ -206,9 +264,11 @@ static void loadPriceCfg(const uint8_t h[3], Reader &r) {
   float pc = -1, ec = -1, np = -1, hp = -1, ntp = -1;
   int on = 0, sh = 22, eh = 6, mode = 0;
   int h0s = 0, h0e = 0, h1s = 0, h1e = 0, n0s = 0, n0e = 0, n1s = 0, n1e = 0;
-  int got = sscanf(buf, "%f,%f,%d,%d,%d,%f,%d,%f,%f,%d,%d,%d,%d,%d,%d,%d,%d",
+  int m0s = 0, m0e = 0, m1s = 0, m1e = 0, q0s = 0, q0e = 0, q1s = 0, q1e = 0;
+  int got = sscanf(buf, "%f,%f,%d,%d,%d,%f,%d,%f,%f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
                     &pc, &ec, &on, &sh, &eh, &np, &mode, &hp, &ntp,
-                    &h0s, &h0e, &h1s, &h1e, &n0s, &n0e, &n1s, &n1e);
+                    &h0s, &h0e, &h1s, &h1e, &n0s, &n0e, &n1s, &n1e,
+                    &m0s, &m0e, &m1s, &m1e, &q0s, &q0e, &q1s, &q1e);
   if (got < 2) return;
   r.priceCentOverride = pc; r.exportCentOverride = ec; r.nightTariffOn = on != 0;
   if (sh >= 0 && sh <= 23) r.nightStartHour = (uint8_t)sh;
@@ -220,10 +280,14 @@ static void loadPriceCfg(const uint8_t h[3], Reader &r) {
   } else {
     r.tariffMode = r.nightTariffOn ? 1 : 0;   // old blob -- derive from the day/night flag it does have
   }
-  if (got >= 17) {
-    auto h8 = [](int v) -> uint8_t { return (v >= 0 && v <= 23) ? (uint8_t)v : 0; };
-    r.htStart[0] = h8(h0s); r.htEnd[0] = h8(h0e); r.htStart[1] = h8(h1s); r.htEnd[1] = h8(h1e);
-    r.ntStart[0] = h8(n0s); r.ntEnd[0] = h8(n0e); r.ntStart[1] = h8(n1s); r.ntEnd[1] = h8(n1e);
+  if (got >= 25) {        // written by a firmware with minute-precise windows -- these are authoritative
+    auto m16 = [](int v) -> uint16_t { return (v >= 0 && v < OBI_DAY_MINUTES) ? (uint16_t)v : 0; };
+    r.htStart[0] = m16(m0s); r.htEnd[0] = m16(m0e); r.htStart[1] = m16(m1s); r.htEnd[1] = m16(m1e);
+    r.ntStart[0] = m16(q0s); r.ntEnd[0] = m16(q0e); r.ntStart[1] = m16(q1s); r.ntEnd[1] = m16(q1e);
+  } else if (got >= 17) {   // hour-only blob from an older firmware -- same windows, on the hour
+    auto h60 = [](int v) -> uint16_t { return (v >= 0 && v <= 23) ? (uint16_t)(v * 60) : 0; };
+    r.htStart[0] = h60(h0s); r.htEnd[0] = h60(h0e); r.htStart[1] = h60(h1s); r.htEnd[1] = h60(h1e);
+    r.ntStart[0] = h60(n0s); r.ntEnd[0] = h60(n0e); r.ntStart[1] = h60(n1s); r.ntEnd[1] = h60(n1e);
   }
   // Re-sync to whatever tariffMode was actually resolved above -- normally already consistent (savePriceCfg
   // always writes nightTariffOn = (tariffMode==1)), but this keeps a hand-edited or otherwise inconsistent
@@ -244,6 +308,12 @@ static Reader *addReader(const uint8_t h[3]) {
     x = Reader{}; x.used = true; x.lastSeenMs = millis(); memcpy(x.handle, h, 3);   // stamp now so a fresh entry isn't instantly pruned
     if (loadUuid(h, x.uuid)) x.haveUuid = true;     // restore a previously-seen UUID
     x.assigned = loadAssigned(h);                   // restore the accept flag (auto-binds on sight)
+    // Restore the persisted TEA key -- only for a reader actually bound to this gateway, so an unassigned
+    // reader is never keyed from flash and "Remove" really does drop everything.
+    if (x.assigned && loadKey(h, x.key, &x.keySoftver, &x.keyHardver)) {
+      x.haveKey = true; x.keyRestored = true;       // unconfirmed until a frame decodes with it
+      Serial.printf("[key] restored for %02X%02X%02X (sv %u hv %u)\n", h[0], h[1], h[2], x.keySoftver, x.keyHardver);
+    }
     uint16_t iv = loadInterval(h);                  // persisted upload interval (0 = never configured)
     x.setInterval = iv ? iv : OBI_DEFAULT_INTERVAL; // new/unconfigured reader -> default, so it's shown in UI/MQTT AND pushed in the ACK
     loadName(h, x.name, sizeof x.name);             // restore the friendly name (empty = none set)
@@ -413,6 +483,7 @@ void gw_request_interval(const uint8_t handle[3], uint16_t seconds) {
 bool gw_delete_reader(const uint8_t handle[3]) {
   saveAssigned(handle, false);        // remove the persisted binding
   saveInterval(handle, 0);            // forget the persisted upload interval too
+  eraseKey(handle);                   // and the persisted TEA key -- un-adopting must not leave it behind
   bool found = false;
   for (auto &r : readers)
     if (r.used && !memcmp(r.handle, handle, 3)) { r.assigned = false; r.haveKey = false; r.used = false; found = true; }
@@ -423,10 +494,11 @@ bool gw_delete_reader(const uint8_t handle[3]) {
 // after reboots. Dropping also forgets its key so it stops being maintained.
 bool gw_assign_reader(const uint8_t handle[3], bool on) {
   saveAssigned(handle, on);
+  if (!on) eraseKey(handle);   // drop the stored key too (also when the reader isn't in the live list)
   for (auto &r : readers)
     if (r.used && !memcmp(r.handle, handle, 3)) {
       r.assigned = on;
-      if (!on) { r.haveKey = false; r.decoded = false; bthome_forget(handle); }
+      if (!on) { r.haveKey = false; r.keyRestored = false; r.decoded = false; bthome_forget(handle); }
       return true;
     }
   return true;   // persisted even if the reader isn't currently in the live list
@@ -485,8 +557,8 @@ bool gw_set_reader_boxcfg(const uint8_t handle[3], const char *cfg) {
 bool gw_set_reader_price(const uint8_t handle[3], float priceCent, float exportCent,
                           bool nightOn, uint8_t nightStart, uint8_t nightEnd, float nightPriceCent,
                           uint8_t tariffMode, float htPriceCent, float ntPriceCent,
-                          uint8_t ht0s, uint8_t ht0e, uint8_t ht1s, uint8_t ht1e,
-                          uint8_t nt0s, uint8_t nt0e, uint8_t nt1s, uint8_t nt1e) {
+                          uint16_t ht0s, uint16_t ht0e, uint16_t ht1s, uint16_t ht1e,
+                          uint16_t nt0s, uint16_t nt0e, uint16_t nt1s, uint16_t nt1e) {
   (void)nightOn;   // superseded by the tariffMode-derived value below -- kept as a param for API stability
   for (auto &r : readers)
     if (r.used && !memcmp(r.handle, handle, 3)) {
@@ -500,10 +572,10 @@ bool gw_set_reader_price(const uint8_t handle[3], float priceCent, float exportC
       r.nightStartHour = (uint8_t)(nightStart % 24); r.nightEndHour = (uint8_t)(nightEnd % 24);
       r.nightPriceCent = nightPriceCent;
       r.htPriceCent = htPriceCent; r.ntPriceCent = ntPriceCent;
-      r.htStart[0] = (uint8_t)(ht0s % 24); r.htEnd[0] = (uint8_t)(ht0e % 24);
-      r.htStart[1] = (uint8_t)(ht1s % 24); r.htEnd[1] = (uint8_t)(ht1e % 24);
-      r.ntStart[0] = (uint8_t)(nt0s % 24); r.ntEnd[0] = (uint8_t)(nt0e % 24);
-      r.ntStart[1] = (uint8_t)(nt1s % 24); r.ntEnd[1] = (uint8_t)(nt1e % 24);
+      r.htStart[0] = (uint16_t)(ht0s % OBI_DAY_MINUTES); r.htEnd[0] = (uint16_t)(ht0e % OBI_DAY_MINUTES);
+      r.htStart[1] = (uint16_t)(ht1s % OBI_DAY_MINUTES); r.htEnd[1] = (uint16_t)(ht1e % OBI_DAY_MINUTES);
+      r.ntStart[0] = (uint16_t)(nt0s % OBI_DAY_MINUTES); r.ntEnd[0] = (uint16_t)(nt0e % OBI_DAY_MINUTES);
+      r.ntStart[1] = (uint16_t)(nt1s % OBI_DAY_MINUTES); r.ntEnd[1] = (uint16_t)(nt1e % OBI_DAY_MINUTES);
       savePriceCfg(handle, r);
       // A tariff-mode change alters which zone-breakdown sensors are relevant (day/night vs HT/ST/NT) --
       // re-announce so HA drops the no-longer-relevant ones and picks up the newly-relevant ones (see
@@ -514,6 +586,79 @@ bool gw_set_reader_price(const uint8_t handle[3], float priceCent, float exportC
     }
   return false;
 }
+// Enumerating an NVS namespace is the one place the IDF 4 / IDF 5 APIs differ (iterator by return value
+// vs. by out-parameter), so the difference is confined to these two wrappers.
+#if defined(ESP_IDF_VERSION_MAJOR) && ESP_IDF_VERSION_MAJOR >= 5
+static inline nvs_iterator_t nvsFirstKey(const char *ns) {
+  nvs_iterator_t it = nullptr;
+  return nvs_entry_find("nvs", ns, NVS_TYPE_ANY, &it) == ESP_OK ? it : nullptr;
+}
+static inline nvs_iterator_t nvsNextKey(nvs_iterator_t it) {
+  // on anything but ESP_OK (including "no more entries") the iterator is released and nulled for us
+  return nvs_entry_next(&it) == ESP_OK ? it : nullptr;
+}
+#else
+static inline nvs_iterator_t nvsFirstKey(const char *ns) { return nvs_entry_find("nvs", ns, NVS_TYPE_ANY); }
+static inline nvs_iterator_t nvsNextKey(nvs_iterator_t it) { return nvs_entry_next(it); }
+#endif
+
+// The "obiassign" namespace is the source of truth for which readers SHOULD be here, and its keys ARE the
+// handles (6 hex chars, see uuidKey()), so they are enumerated directly rather than mirrored into a second
+// list that could drift out of sync.
+// Two passes on purpose: collect the handles while the iterator is open, then read the stored flag and the
+// name through Preferences afterwards, so no NVS handle is ever opened underneath a live iterator.
+// This costs ~16 flash reads plus three Preferences handles per reader, so it runs only when the list has
+// actually changed (g_knownDirty) -- never per dashboard poll or MQTT publish.
+#define GW_KNOWN_MAX 32
+static GwKnownReader g_known[GW_KNOWN_MAX];
+static int g_knownN = 0;
+
+static void knownReadersRefresh() {
+  uint8_t handles[GW_KNOWN_MAX][3];
+  int found = 0;
+  const int cap = GW_KNOWN_MAX;
+  nvs_iterator_t it = nvsFirstKey("obiassign");
+  while (it && found < cap) {
+    nvs_entry_info_t info;
+    nvs_entry_info(it, &info);
+    if (strlen(info.key) == 6) {
+      uint8_t h[3];
+      bool ok = true;
+      for (int i = 0; i < 3 && ok; i++) {
+        char b[3] = {info.key[i * 2], info.key[i * 2 + 1], 0};
+        if (!isxdigit((unsigned char)b[0]) || !isxdigit((unsigned char)b[1])) ok = false;
+        else h[i] = (uint8_t)strtol(b, nullptr, 16);
+      }
+      if (ok && !isIgnoredHandle(h)) { memcpy(handles[found], h, 3); found++; }
+    }
+    it = nvsNextKey(it);
+  }
+  if (it) nvs_release_iterator(it);   // only reachable when we stopped at the cap
+  int n = 0;
+  for (int i = 0; i < found; i++) {
+    if (!loadAssigned(handles[i])) continue;      // a stale or false entry is not a bound reader
+    memcpy(g_known[n].handle, handles[i], 3);
+    g_known[n].name[0] = 0;
+    loadName(handles[i], g_known[n].name, sizeof g_known[n].name);
+    // the EFFECTIVE interval, like addReader() gives a live slot: 0 in NVS just means "never configured"
+    { uint16_t iv = loadInterval(handles[i]); g_known[n].interval = iv ? iv : OBI_DEFAULT_INTERVAL; }
+    n++;
+  }
+  g_knownN = n;
+}
+
+// Every reader PERSISTED as bound to this gateway, whether or not it currently has a live slot.
+// readers[] only ever holds readers that have transmitted since boot, so a reader whose battery died while
+// the gateway was restarting is not in it -- it would silently vanish from the dashboard instead of being
+// flagged, which is what this exists for. Served from the RAM cache above; call it from the main/web task.
+int gw_known_readers(GwKnownReader *out, int max) {
+  if (!out || max <= 0) return 0;
+  if (g_knownDirty) { g_knownDirty = false; knownReadersRefresh(); }
+  int n = 0;
+  for (int i = 0; i < g_knownN && n < max; i++) out[n++] = g_known[i];
+  return n;
+}
+
 // Open a window during which every announcing reader is auto-accepted (default 3 min from the web button).
 void gw_pair_all(uint16_t seconds) {
   g_pairUntil = millis() + (uint32_t)seconds * 1000;
@@ -1014,6 +1159,9 @@ static void handleRx() {
       if (obi_ecdh_compute(d + 4, secret)) {
         memcpy(r->key, secret, 16);                         // TEA key = first 16 of shared X
         r->haveKey = true;
+        r->keyRestored = false;                             // freshly negotiated -- nothing to prove
+        r->keySoftver = r->softver; r->keyHardver = r->hardver;   // 0/0 if this reader never decoded yet
+        saveKey(r->handle, r->key, r->keySoftver, r->keyHardver); // survive the next reboot / firmware update
         Serial.print("  ECDH ok, TEA key = "); hexdump(r->key, 16); Serial.println();
         sendEcdhReply(r);                                   // send our pubkey back
       } else {
@@ -1090,6 +1238,19 @@ static void handleRx() {
                                    if (energyValid(p, plen)) how = "plain/1.2.x"; }
         if (!how && !r->haveKey && legacyCmd) { memcpy(p, d + 4, plen);
                                    if (legacyValid(p, plen)) { how = "plain/legacy"; legacy = true; } }
+        // A key restored from NVS that only matched the LEGACY layout has proved nothing: that check has no
+        // CRC behind it and passes on ~11% of random plaintext, so a key the reader no longer holds could
+        // publish garbage counters -- which would then STICK, because a repeating implausible value is
+        // deliberately adopted as a new baseline (see energy_filter.h). Require the frame to reproduce the
+        // softver/hardver stored with the key as well: random plaintext manages that about once in 600k
+        // frames. Stored versions of 0 (ECDH done but no frame decoded before the reboot) never match, so
+        // such a key is dropped a few frames down and re-negotiated -- i.e. exactly the behaviour of every
+        // reboot before the key was persisted at all. A reader that updated its own firmware lands here
+        // once too, and re-pairs.
+        const char *held = nullptr;
+        if (how && legacy && r->keyRestored && (p[0] != r->keySoftver || p[1] != r->keyHardver)) {
+          held = how; how = nullptr;
+        }
         if (how) {
           Serial.printf("  energy [%s]: ", how); hexdump(p, plen); Serial.println();
           if (legacy) printEnergyOld(p, plen); else printEnergy(p, plen);
@@ -1097,6 +1258,17 @@ static void handleRx() {
           // still-TEA raw frame
           gw_radio_log_dec(rlogIdx, p, (int)plen, legacy ? describeEnergyOld(p, plen) : describeEnergy(p, plen));
           r->decoded = true; r->decFails = 0; r->inBootloader = false;   // back to normal app operation
+          // The key behind this frame is confirmed now (CRC16 for 1.2.x, softver/hardver match for legacy).
+          r->keyRestored = false;
+          // Keep the stored version bytes current -- first decode after an ECDH, or the reader updated its
+          // own firmware -- so the next restore can still check itself.
+          if (r->haveKey) {
+            uint8_t ksv = legacy ? p[0] : p[2], khv = legacy ? p[1] : p[3];
+            if (ksv != r->keySoftver || khv != r->keyHardver) {
+              r->keySoftver = ksv; r->keyHardver = khv;
+              saveKey(r->handle, r->key, ksv, khv);
+            }
+          }
           // OTA auto-finish: if THIS reader pulled our armed image (was in its bootloader for the OTA) and is
           // now decoding energy again, it has flashed + rebooted into the new firmware -> the update is done.
           // Disarm so the GUI/MQTT stop showing "OTA in progress" and we stop advertising the update version.
@@ -1222,10 +1394,14 @@ static void handleRx() {
             // else: window not full yet OR counters unchanged -- keep the previous calcPower and anchor
           }
         } else {
-          Serial.print("  energy undecoded. raw: "); hexdump(d + 4, plen); Serial.println();
+          if (held)
+            Serial.printf("  energy [%s] rejected: restored key unconfirmed (sv %u!=%u / hv %u!=%u)\n",
+                          held, p[0], r->keySoftver, p[1], r->keyHardver);
+          else { Serial.print("  energy undecoded. raw: "); hexdump(d + 4, plen); Serial.println(); }
           // a keyed reader whose frames stop decrypting was reset -> drop the stale key and re-pair
           if (r->haveKey && ++r->decFails >= 3) {
-            r->haveKey = false; r->decoded = false; r->decFails = 0;
+            r->haveKey = false; r->decoded = false; r->decFails = 0; r->keyRestored = false;
+            eraseKey(r->handle);   // and the persisted copy, or the next boot would restore the stale key
             Serial.println("  (key stale — reader was reset; will re-pair on next announce)");
           }
         }
@@ -1633,6 +1809,9 @@ void setup() {
   unl_setup();     // ObiUnlocked: radio sharing settings + known wM-Bus/LoRaWAN devices (before loraTask)
   xTaskCreatePinnedToCore(loraTask, "lora", 8192, nullptr, 20, nullptr, CONFIG_ARDUINO_RUNNING_CORE);
   web_setup();     // WiFi config portal + web dashboard + MQTT (non-fatal if WiFi is unavailable)
+  // web_setup() is what reads the night-mode flag out of NVS, so this is the first moment we know: drop
+  // the boot blink right here instead of letting it run on until loop()'s first LED tick.
+  if (web_night_mode()) led_set(LED_OFF);
 }
 
 // loop() is now just the low-priority housekeeping — the radio/LoRa lives in loraTask (high priority),
@@ -1645,7 +1824,8 @@ void loop() {
 #endif
   flash_dbg_uart_poll();   // service the UART flash console (non-blocking)
 
-  // status LED: pick the steady pattern (reset-arming > OTA > WiFi > setup-portal), then service it
+  // status LED: pick the steady pattern (reset-arming > OTA > night mode > WiFi > setup-portal), then
+  // service it.
   static uint32_t ledTick = 0;
   if (now - ledTick >= 100) {
     ledTick = now;
@@ -1653,9 +1833,17 @@ void loop() {
 #ifdef PIN_BUTTON
     arming = g_btnArming;
 #endif
+    // Night mode keeps the LED dark whether or not WiFi is up. It used to be consulted only in the
+    // "connected" branch, so losing the connection fell through to the setup-AP pattern and blinked all
+    // night -- exactly what happens when a router switches its WiFi off on an overnight schedule (reported
+    // from the field). The two surviving indications are both ones a person is standing in front of: the
+    // button held toward a factory reset, and a running OTA ("don't cut the power now"), which is over in
+    // seconds. A gateway that was never configured still blinks for attention, since night mode is off by
+    // default and a factory reset clears it along with the rest of the "obigw" settings.
     if      (arming)                led_set(LED_RESET_ARMED);
     else if (gw_ota_active())       led_set(LED_OTA);
-    else if (web_wifi_connected())  led_set(web_night_mode() ? LED_OFF : LED_WIFI);
+    else if (web_night_mode())      led_set(LED_OFF);
+    else if (web_wifi_connected())  led_set(LED_WIFI);
     else                            led_set(LED_PORTAL);
   }
   led_loop();

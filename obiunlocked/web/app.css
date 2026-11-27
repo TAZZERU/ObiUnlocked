@@ -141,3 +141,7 @@ footer{color:var(--mut);font-size:12px;text-align:center;padding:18px}
  table.dl td.hm{display:none}
  .fav{grid-template-columns:1fr}
 }
+/* ---- reader alerts on the dashboard ---- */
+.alerts{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}.alerts:empty{display:none}
+.alert{display:flex;gap:10px;align-items:center;border:1px solid var(--rd);border-left-width:4px;border-radius:6px;padding:7px 10px;background:var(--p1);font-size:13.5px}
+.alert span{flex:1 1 auto}.alert b{font-family:var(--mono)}

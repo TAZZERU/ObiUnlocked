@@ -40,6 +40,16 @@ card with its **import / export / power**, **battery** (with a charge bar), **op
 **last-seen** age. New readers show up greyed-out until you press **Bind** (or *Bind all for 3 min*); a
 bound reader also exposes a **Set interval** field and a **Flash firmware** picker right on its card.
 
+**Alerts.** A bound reader that stops reporting is called out in a red banner above the cards, naming the
+reader and what is wrong: *no signal* (after 15 minutes, or five missed reports for a longer interval),
+*battery low* (the reader's own low-power flag, or below 2.6 V), *stuck in bootloader mode*, and *not seen
+since the gateway started* — that last one matters because a reader whose battery died while the gateway
+was restarting has no live slot at all and would otherwise just be missing from the list without a word
+(the bound set comes straight out of NVS for exactly this, and the warning waits until a report from that
+reader is genuinely overdue, so a restart alone never raises it). Each message can be dismissed with ✕ when the
+outage is intentional; the dismissal covers that one episode, so the warning returns if the reader recovers
+and then fails again.
+
 ### History — daily kWh & cost
 ![Per-reader energy history](images/Overview_history.png)
 
@@ -212,7 +222,7 @@ running firmware kept (brick-safe dual-OTA). The build → flash → verify loop
 - **MQTT panel** (⚙): configure host/port/user/pass/base-topic and see live status (connected, last
   publish, message count); a **Send discovery** button re-publishes all Home Assistant discovery configs.
 - **DE/EN toggle**, remembered in the browser.
-- **Night mode** in Settings disables the WiFi heartbeat and LoRa receive flashes of the status LED; setup, OTA and error indications remain active.
+- **Night mode** in Settings keeps the status LED dark in normal operation: the WiFi heartbeat, the LoRa receive flashes *and* the no-WiFi / setup-AP pattern are all muted, so a router that switches its WiFi off overnight no longer leaves the LED blinking until morning. Two indications stay, both for someone standing at the device: a running OTA (over in seconds, and it means "don't cut the power") and the fast blink while the case button is held toward a factory reset. A gateway with no WiFi configured yet always blinks for attention — night mode is off by default and a factory reset clears it.
 - The web/MQTT stack runs on **core 0** while LoRa runs on **core 1**, so HTTP traffic never stutters the
   radio timing.
 
@@ -234,6 +244,21 @@ set once for all readers), and a raw Watt table with both the meter's own power 
 purely from the import/export counter deltas — useful when a meter's own Watt value is missing or wrong
 (e.g. a broken 24-bit sign extension on negative power some DWSB20-2TH units hit).
 
+- **How much is written is a setting.** *Settings → Misc → History storage* has three levels, for setups
+  that already archive every reading elsewhere (MQTT → InfluxDB, Home Assistant long-term statistics) and
+  would rather not have the gateway write a second copy:
+  **Full** (the default) keeps both logs as described below. **Daily rows only** drops the raw-sample log —
+  that is the only frequent writer, at most one sample per reader per 30 s, while a daily row is *one*
+  write per reader per day — and still keeps the daily bar charts plus the start-of-day baseline the MQTT
+  `today_*` fields recover from after a restart. **Off** writes nothing at all; be aware that without that
+  durable baseline the `today_*` fields stay `null` after a restart until the next midnight
+  ([#108](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud/issues/108)), which is harmless when
+  the real archive lives elsewhere. In both reduced levels the `/history` page keeps working from an
+  in-RAM ring of the most recent ~512 samples (about 4 h for a single reader; ~10 KB of heap, allocated
+  only while the level is not *Full*), and the page's storage line says so instead of showing flash
+  figures that no longer move. Nothing already stored is ever deleted — switching only stops and resumes
+  the writes. `POST /api/histmode` with `mode=0|1|2` does the same from a script; `/api/status` reports it
+  as `hist_fs.mode` along with `hist_fs.ram`/`ram_cap`.
 - **Daily summaries** (one row per calendar day) always live in the small 128 KB "userdata" data partition
   every board ships — the one storage location that's never resized or reformatted, so long-term totals
   are never at risk. Retention isn't a fixed day count: the partition's capacity is split fairly across
@@ -316,10 +341,73 @@ For BTHome, the receiving Bluetooth proxy matters too: ESPHome's default passive
   `offline`, and `online` again on its next frame — so a reader with a flat battery or out of range shows up
   as *unavailable* in HA instead of freezing on its last value or dropping a bogus reading into the
   statistics. HA entities require **both** topics to be `online` (`availability_mode: all`).
+- **Reader health**: a retained `‹base›/‹id›/health` topic carries one word — `ok`, `no_signal`,
+  `battery_low` or `bootloader` — and is published whenever that verdict changes, *not* only when a frame
+  arrives (which is exactly what stops happening when a reader dies). Home Assistant gets it as a **Status**
+  sensor per reader. The same word is in the reader's JSON as `status`, and the mask behind it drives the
+  dashboard's alert banner, so web, API and MQTT can never disagree — the rule lives in one place
+  (`include/reader_status.h`): silent after five missed reports (floor 15 min, ceiling 1 h), battery low on
+  the reader's own low-power flag or below 2.6 V. This is a slower, calmer question than the per-reader
+  availability above, which answers "is this value still current?" and may flap on a weak link.
+- **Gateway summary**: the gateway's own state topic carries `readers_problem` (bound readers in trouble
+  right now) and `readers_missing` (bound, overdue, and not heard from at all since the gateway booted — a
+  reader that went flat while the gateway restarted has no live entity of its own to report it). HA gets
+  `readers_problem` as a **Reader problems** sensor, which is the single entity to put an automation on.
 - **Subscribe**: `‹base›/+/set_interval` (see above).
 - **Status** is exposed on `/api/status` (`connected`, `state`, `pub_count`, `last_pub_s`) and shown in the
   dashboard MQTT panel.
 - All settings are configurable in the web UI and persisted in NVS.
+
+### MQTTS (TLS) — what is checked, and how to debug it
+
+The CA field holds a **trust anchor**, nothing else: the PEM you paste is handed to mbedTLS as the CA the
+*broker's* certificate must chain up to (`setCACert`). The gateway never sends a client certificate — mutual
+TLS is not implemented — so a broker log line like
+
+```
+OpenSSL Error[0]: error:0A000412:SSL routines::ssl/tls alert bad certificate
+Client <unknown> disconnected: Protocol error.
+```
+
+is **the gateway rejecting the broker**, not the broker rejecting the gateway. The alert is all the broker
+gets to see; the reason stays on the ESP32.
+
+Two things decide whether verification succeeds:
+
+- **The name you dialled must be in the certificate.** mbedTLS matches the exact string from the *Server*
+  field against the certificate's **`dNSName` SANs**, and falls back to the **CN** only when the certificate
+  carries no SAN extension at all. An **`iPAddress` SAN is not matched** by this build — so if you connect
+  by IP, the certificate needs that IP spelled out as a `dNSName` (or no SAN extension and `CN = <the IP>`).
+  Using a hostname that resolves on your LAN and putting it in the SAN is the clean route.
+- **The chain must be complete.** If the broker's certificate is signed by an intermediate, the broker has to
+  send that intermediate too (mosquitto: concatenate leaf + intermediate in `certfile`); pasting the root
+  alone is not enough.
+
+Validity dates are a separate story: ESP-IDF builds mbedTLS with `MBEDTLS_HAVE_TIME_DATE` **unset**, so
+`notBefore`/`notAfter` are **not** part of the verification — an expired broker certificate is accepted.
+
+**Debugging it:** *Settings → MQTT → Check TLS* (`POST /api/mqtt/tlsdiag`). It repeats the handshake with
+verification switched off, so it can show the chain the broker really sends — subject, issuer, validity,
+SANs — and then verifies that chain against the CA by hand and prints the decoded reason:
+
+```
+192.168.1.152:8883 — TLS handshake ok
+#1 CN=obi-broker.local
+   issued by: CN=My home CA
+   valid: 2026-11-11 08:39:10 UTC … 2026-12-13 08:39:10 UTC
+   SAN: obi-broker.local
+verification failed:
+   ! The certificate Common Name (CN) does not match with the expected CN
+```
+
+It takes whatever is currently typed into the host/port/CA fields, so a certificate can be tested before it
+is saved, and it also distinguishes *nothing listening there* from *TLS did not come up* (e.g. MQTTS ticked
+against a plaintext port) from *the certificate does not verify*. The date check in that output is done by
+the page itself, not by mbedTLS, and an expired certificate is flagged there.
+
+The last failed connect attempt is kept too: `/api/status` reports it as `mqtt.last_err` (PubSubClient's
+state plus the mbedTLS error behind it, e.g. `connect failed | TLS -9984: X509 - Certificate verification
+failed`), and the Settings page shows it next to the MQTT status.
 
 ### Home Assistant auto-discovery
 
@@ -496,6 +584,16 @@ bekommt eine Karte mit **Bezug / Einspeisung / Leistung**, **Batterie** (mit Lad
 Status und **Zuletzt gesehen**. Neue Reader erscheinen ausgegraut, bis du **Bind** drückst (oder *Bind all
 for 3 min*); ein gekoppelter Reader zeigt zusätzlich ein **Intervall setzen**-Feld und einen **Firmware
 flashen**-Auswähler direkt auf der Karte.
+
+**Warnungen.** Meldet ein gebundener Reader nicht mehr, steht das in einem roten Banner über den Karten —
+mit Reader-Name und Problem: *kein Signal* (nach 15 Minuten, bei längerem Intervall nach fünf verpassten
+Meldungen), *Batterie schwach* (das Low-Power-Flag des Readers selbst oder unter 2,6 V), *steckt im
+Bootloader-Modus* und *seit dem Start des Gateways nicht gesehen*. Letzteres ist der wichtige Fall: ein
+Reader, dessen Batterie während eines Gateway-Neustarts leer wurde, hat gar keinen Live-Eintrag und
+würde sonst einfach kommentarlos in der Liste fehlen (die gebundene Menge kommt deshalb direkt aus dem
+NVS; die Warnung wartet, bis eine Meldung dieses Readers wirklich überfällig ist, ein Neustart allein
+löst sie also nie aus). Jede Meldung lässt sich mit ✕ ausblenden, wenn der Ausfall gewollt ist; das gilt für genau diesen
+Vorfall, die Warnung kommt also wieder, wenn der Reader sich erholt und später erneut ausfällt.
 
 ### History — kWh & Kosten pro Tag
 ![Energie-Verlauf je Reader](images/Overview_history.png)
@@ -674,7 +772,7 @@ Build-→-Flash-→-Verify-Ablauf und die Endpoint-Details stehen in [`PROJECT_N
   (verbunden, zuletzt gesendet, Anzahl); ein **Discovery senden**-Button publiziert alle
   Home-Assistant-Discovery-Configs neu.
 - **DE/EN-Umschalter**, im Browser gemerkt.
-- **Nachtmodus** in den Einstellungen schaltet WLAN-Heartbeat und LoRa-Empfangsblitze der Status-LED ab; Setup-, OTA- und Fehleranzeigen bleiben aktiv.
+- **Nachtmodus** in den Einstellungen hält die Status-LED im Normalbetrieb dunkel: WLAN-Heartbeat, LoRa-Empfangsblitze **und** das Muster für „kein WLAN / Setup-AP" sind stumm — ein Router, der sein WLAN nachts abschaltet, lässt die LED damit nicht mehr bis zum Morgen blinken. Zwei Anzeigen bleiben, beide für jemanden, der direkt am Gerät steht: ein laufendes OTA (nach Sekunden vorbei, Bedeutung „jetzt nicht vom Strom trennen") und das schnelle Blinken, während die Gehäusetaste in Richtung Werksreset gehalten wird. Ein Gateway ohne konfiguriertes WLAN blinkt weiterhin — der Nachtmodus ist standardmäßig aus und wird vom Werksreset gelöscht.
 - Der Web-/MQTT-Stack läuft auf **Core 0**, LoRa auf **Core 1**, damit HTTP-Verkehr das Funk-Timing nie stört.
 
 ### On-Board-E-Ink-Display (Heltec Vision Master E290)
@@ -696,6 +794,22 @@ dem Leistungswert des Zählers selbst als auch einem rein aus den Import/Export-
 — nützlich, wenn der eigene Watt-Wert eines Zählers fehlt oder falsch ist (z. B. eine fehlerhafte 24-Bit-
 Vorzeichenerweiterung bei negativer Leistung, die manche DWSB20-2TH-Einheiten betrifft).
 
+- **Wie viel geschrieben wird, ist einstellbar.** *Einstellungen → Sonstiges → Verlaufsspeicher* kennt drei
+  Stufen — gedacht für Setups, die jeden Messwert ohnehin anderswo archivieren (MQTT → InfluxDB,
+  Home-Assistant-Langzeitstatistik) und dem Gateway die zweite Kopie ersparen wollen:
+  **Vollständig** (Standard) schreibt beide Logs wie unten beschrieben. **Nur Tageswerte** lässt das
+  Rohdaten-Log weg — das ist der einzige häufige Schreiber, höchstens ein Messpunkt pro Reader und 30 s,
+  während eine Tageszeile *ein* Schreibvorgang pro Reader und Tag ist — und behält damit die Tagesbalken
+  und die Tagesbasis, aus der sich die MQTT-`today_*`-Felder nach einem Neustart wiederherstellen.
+  **Aus** schreibt gar nichts mehr; ohne diese Basis bleiben `today_*` nach einem Neustart bis zum
+  nächsten Mitternacht `null` ([#108](https://github.com/atc1441/OBI_Energy_Tracker_Local_Cloud/issues/108)) —
+  unkritisch, wenn das eigentliche Archiv woanders liegt. In beiden reduzierten Stufen arbeitet die
+  `/history`-Seite mit einem RAM-Ring der letzten ~512 Messpunkte weiter (bei einem einzelnen Reader etwa
+  4 h; ~10 KB Heap, nur belegt solange die Stufe nicht *Vollständig* ist), und die Speicherzeile der Seite
+  sagt das auch, statt Flash-Zahlen zu zeigen, die sich nicht mehr bewegen. Schon gespeicherte Daten werden
+  nie gelöscht — Umschalten stoppt bzw. setzt nur die Schreibvorgänge fort. Per Skript macht
+  `POST /api/histmode` mit `mode=0|1|2` dasselbe; `/api/status` liefert die Stufe als `hist_fs.mode`
+  zusammen mit `hist_fs.ram`/`ram_cap`.
 - **Tageswerte** (eine Zeile pro Kalendertag) liegen immer in der kleinen 128-KB-„userdata"-Datenpartition,
   die jedes Board mitbringt — der eine Speicherort, der nie in der Größe verändert oder neu formatiert wird,
   sodass Langzeit-Summen nie in Gefahr sind. Die Aufbewahrung ist keine feste Tagesanzahl: die Kapazität der
@@ -781,10 +895,77 @@ Bei BTHome zählt auch der empfangende Bluetooth-Proxy: ESPHomes Standard-Scanfe
   publiziert, beim nächsten Frame wieder `online` — ein Reader mit leerer Batterie oder außer Reichweite steht
   in HA damit als *nicht verfügbar* da, statt auf dem letzten Wert einzufrieren oder einen falschen Wert in die
   Statistik zu schreiben. HA-Entities brauchen **beide** Topics auf `online` (`availability_mode: all`).
+- **Reader-Zustand**: ein retained Topic `‹base›/‹id›/health` trägt ein Wort — `ok`, `no_signal`,
+  `battery_low` oder `bootloader` — und wird immer dann publiziert, wenn sich dieses Urteil ändert, *nicht*
+  nur wenn ein Frame kommt (und genau das hört ja auf, wenn ein Reader stirbt). In Home Assistant kommt das
+  als **Status**-Sensor pro Reader an. Dasselbe Wort steht als `status` im JSON des Readers, und die
+  Bitmaske dahinter speist das Warnbanner des Dashboards — Web, API und MQTT können sich also nicht
+  widersprechen, die Regel steht an einer Stelle (`include/reader_status.h`): still nach fünf verpassten
+  Meldungen (min. 15 min, max. 1 h), Batterie schwach beim Low-Power-Flag des Readers oder unter 2,6 V.
+  Das ist die langsamere, ruhigere Frage als die Verfügbarkeit oben, die „ist dieser Wert noch aktuell?"
+  beantwortet und bei schwacher Funkstrecke auch mal pendelt.
+- **Gateway-Übersicht**: das Status-Topic des Gateways trägt `readers_problem` (gebundene Reader mit einem
+  Problem) und `readers_missing` (gebunden, überfällig und seit dem Start des Gateways überhaupt nicht
+  gehört — ein Reader, dessen Batterie während eines Neustarts leer wurde, hat gar keine eigene Entity
+  mehr, die das melden könnte). HA bekommt `readers_problem` als Sensor **Reader problems**; das ist die
+  eine Entity, auf die eine Automatisierung gehört.
 - **Subscribe**: `‹base›/+/set_interval` (siehe oben).
 - **Status** liegt auf `/api/status` (`connected`, `state`, `pub_count`, `last_pub_s`) und wird im
   MQTT-Panel angezeigt.
 - Alle Einstellungen sind in der Web-UI konfigurierbar und im NVS persistiert.
+
+### MQTTS (TLS) — was geprüft wird und wie man es debuggt
+
+Das CA-Feld ist ein **Vertrauensanker**, nichts weiter: das eingefügte PEM geht an mbedTLS als die CA, auf
+die das Zertifikat des *Brokers* zurückführen muss (`setCACert`). Das Gateway schickt **kein**
+Client-Zertifikat — gegenseitiges TLS ist nicht implementiert. Eine Broker-Logzeile wie
+
+```
+OpenSSL Error[0]: error:0A000412:SSL routines::ssl/tls alert bad certificate
+Client <unknown> disconnected: Protocol error.
+```
+
+bedeutet also: **das Gateway lehnt den Broker ab**, nicht umgekehrt. Der Broker sieht nur das Alert, der
+Grund bleibt auf dem ESP32.
+
+Zwei Dinge entscheiden über das Ergebnis:
+
+- **Der eingetragene Name muss im Zertifikat stehen.** mbedTLS vergleicht genau die Zeichenkette aus dem
+  Feld *Server* mit den **`dNSName`-SANs** des Zertifikats und fällt nur dann auf den **CN** zurück, wenn das
+  Zertifikat überhaupt keine SAN-Erweiterung hat. Ein **`iPAddress`-SAN wird von diesem Build nicht
+  berücksichtigt** — wer per IP verbindet, braucht die IP als `dNSName` im Zertifikat (oder gar keine
+  SAN-Erweiterung und `CN = <die IP>`). Saubere Variante: einen im LAN auflösbaren Hostnamen verwenden und
+  genau den in den SAN schreiben.
+- **Die Kette muss vollständig sein.** Ist das Broker-Zertifikat von einem Intermediate signiert, muss der
+  Broker dieses Intermediate mitsenden (mosquitto: Leaf + Intermediate zusammen in `certfile`); nur das Root
+  einzufügen genügt nicht.
+
+Gültigkeitsdaten sind ein eigenes Thema: ESP-IDF baut mbedTLS **ohne** `MBEDTLS_HAVE_TIME_DATE`, damit sind
+`notBefore`/`notAfter` **nicht** Teil der Prüfung — ein abgelaufenes Broker-Zertifikat wird akzeptiert.
+
+**Debuggen:** *Einstellungen → MQTT → TLS prüfen* (`POST /api/mqtt/tlsdiag`). Der Handshake wird mit
+abgeschalteter Prüfung wiederholt, dadurch lässt sich die Kette zeigen, die der Broker wirklich sendet —
+Subject, Aussteller, Gültigkeit, SANs — und danach wird genau diese Kette von Hand gegen die CA geprüft und
+der dekodierte Grund ausgegeben:
+
+```
+192.168.1.152:8883 — TLS-Handshake ok
+#1 CN=obi-broker.local
+   ausgestellt von: CN=My home CA
+   gültig: 2026-11-11 08:39:10 UTC … 2026-12-13 08:39:10 UTC
+   SAN: obi-broker.local
+Prüfung fehlgeschlagen:
+   ! The certificate Common Name (CN) does not match with the expected CN
+```
+
+Dabei werden die aktuell eingetippten Werte für Server/Port/CA verwendet, ein Zertifikat lässt sich also vor
+dem Speichern testen. Die Ausgabe unterscheidet außerdem *da hört niemand zu* von *TLS kam nicht zustande*
+(z. B. MQTTS aktiviert gegen einen Klartext-Port) von *das Zertifikat prüft nicht durch*. Die Datumsprüfung
+in dieser Ausgabe macht die Seite selbst, nicht mbedTLS — ein abgelaufenes Zertifikat wird dort markiert.
+
+Der letzte fehlgeschlagene Verbindungsversuch wird ebenfalls gemerkt: `/api/status` liefert ihn als
+`mqtt.last_err` (Status von PubSubClient plus den mbedTLS-Fehler dahinter, z. B. `connect failed | TLS -9984:
+X509 - Certificate verification failed`), die Einstellungsseite zeigt ihn neben dem MQTT-Status.
 
 ### Home-Assistant-Auto-Discovery
 

@@ -70,19 +70,21 @@ button:disabled{opacity:.5;cursor:default}
   <h3>MQTT</h3>
   <div class=stat id=mqstat>…</div>
   <div class=grid>
-   <div><label id=lhost>Server</label><input id=mh placeholder=192.168.1.10></div>
+   <div><label id=lhost>Server</label><input id=mh placeholder=192.168.1.10 maxlength=63></div>
    <div><label>Port</label><input id=mp type=number placeholder=1883></div>
-   <div><label id=luser>Benutzer</label><input id=mu></div>
-   <div><label id=lpass>Passwort</label><input id=mpw type=password placeholder=••••></div>
+   <div><label id=luser>Benutzer</label><input id=mu maxlength=63></div>
+   <div><label id=lpass>Passwort</label><input id=mpw type=password placeholder=•••• maxlength=127></div>
   </div>
-  <label id=ltopic>Basis-Topic</label><input id=mt placeholder=obi/gateway>
+  <label id=ltopic>Basis-Topic</label><input id=mt placeholder=obi/gateway maxlength=47>
   <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
    <input type=checkbox id=mtls style="width:auto;margin:0"><span id=ltls>MQTTS (TLS-Verschlüsselung)</span></label>
   <label id=lca>CA-Zertifikat (PEM, optional)</label>
   <textarea id=mca rows=3 placeholder="-----BEGIN CERTIFICATE-----" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px 10px;font-family:var(--mono);font-size:12px"></textarea>
   <div class=row><button onclick=saveMqtt()><span id=bmsave>Speichern</span></button>
    <button class=g onclick=disc()><span id=bdisc>Discovery senden</span></button>
+   <button class=g onclick=tlsDiag()><span id=btls>TLS prüfen</span></button>
    <span class=msg id=mqmsg></span></div>
+  <pre id=tlsout class=cap style="white-space:pre-wrap;word-break:break-word;margin:8px 0 0;font-family:var(--mono);font-size:12px"></pre>
  </div>
 
  <div class=card>
@@ -134,6 +136,14 @@ button:disabled{opacity:.5;cursor:default}
   <label id=lnumfmt style="margin-top:14px;display:block">Zahlenformat</label>
   <select id=numfmt><option value=0>Automatisch (nach Sprache)</option><option value=1>1.234,56 (EU)</option><option value=2>1,234.56 (US)</option></select>
   <div class=row><button type=button onclick=saveNumFmt()><span id=bnumfmt>Speichern</span></button><span class=msg id=numfmtmsg></span></div>
+  <label id=lhist style="margin-top:14px;display:block">Verlaufsspeicher</label>
+  <select id=histstore>
+   <option value=0 id=ohist0>Vollständig: Rohwerte + Tageswerte</option>
+   <option value=1 id=ohist1>Nur Tageswerte (kaum Schreibzugriffe)</option>
+   <option value=2 id=ohist2>Aus: nichts auf den Flash schreiben</option>
+  </select>
+  <p class=cap id=caphist></p>
+  <div class=row><button type=button onclick=saveHistMode()><span id=bhist>Speichern</span></button><span class=msg id=histmsg></span></div>
  </div>
 
  <div class=card>
@@ -282,7 +292,7 @@ $('lstipd1').textContent=t('DNS 1','DNS 1');$('lstipd2').textContent=t('DNS 2 (o
 $('stipwarn').textContent=t('Eine falsche IP/Gateway/Subnetzmaske kann das Dashboard über das Netzwerk unerreichbar machen — Wiederherstellung dann nur über den Werksreset-Taster am Gerät (setzt WLAN + alle Einstellungen zurück).','A wrong IP/gateway/subnet mask can make the dashboard unreachable over the network — recovery then only via the device\'s factory-reset button (resets WiFi + all settings).');
 $('lhost').textContent=t('Server','Server');$('luser').textContent=t('Benutzer','User');$('lpass').textContent=t('Passwort','Password');
 $('ltopic').textContent=t('Basis-Topic','Base topic');$('bmsave').textContent=t('Speichern','Save');$('bdisc').textContent=t('Discovery senden','Send discovery');
-$('ltls').textContent=t('MQTTS (TLS-Verschlüsselung)','MQTTS (TLS encryption)');$('lca').textContent=t('CA-Zertifikat (PEM, optional)','CA certificate (PEM, optional)');
+$('btls').textContent=t('TLS prüfen','Check TLS');$('ltls').textContent=t('MQTTS (TLS-Verschlüsselung)','MQTTS (TLS encryption)');$('lca').textContent=t('CA-Zertifikat (PEM, optional)','CA certificate (PEM, optional)');
 $('hgwname').textContent=t('Gateway-Name','Gateway name');$('lgwname').textContent=t('Anzeigename (leer = Standard, auch in Home Assistant)','Display name (blank = default, also used in Home Assistant)');$('bgwname').textContent=t('Speichern','Save');
 $('hauth').textContent=t('Web-Zugang','Web access');$('lauser').textContent=t('Benutzer (leer = offen)','User (blank = open)');$('lapass').textContent=t('Passwort','Password');$('basave').textContent=t('Speichern','Save');$('blogout').textContent=t('Abmelden','Log out');
 $('lman2').textContent=t('Manuell flashen (.bin dieses Boards)','Manual flash (.bin for this board)');$('bflash').textContent=t('Flashen & neustart','Flash & reboot');
@@ -295,6 +305,14 @@ $('htime').textContent=t('Zeit','Time');$('ltz').textContent=t('Zeitzone','Timez
 $('hmisc').textContent=t('Sonstiges','Misc');$('lnight').textContent=t('Nachtmodus (normale LED-Aktivität aus)','Night mode (mute normal LED activity)');
 $('bnsave').textContent=t('Speichern','Save');
 $('lnumfmt').textContent=t('Zahlenformat (kWh/W/€ im gesamten Web-UI)','Number format (kWh/W/€ across the whole web UI)');
+$('lhist').textContent=t('Verlaufsspeicher','History storage');
+$('bhist').textContent=t('Speichern','Save');
+$('ohist0').textContent=t('Vollständig: Rohwerte + Tageswerte','Full: raw samples + daily rows');
+$('ohist1').textContent=t('Nur Tageswerte (kaum Schreibzugriffe)','Daily rows only (almost no writes)');
+$('ohist2').textContent=t('Aus: nichts auf den Flash schreiben','Off: nothing written to flash');
+$('caphist').dataset.base=t('Die Rohwerte sind der einzige häufige Schreiber (pro Reader höchstens alle 30 s); eine Tageszeile ist EIN Schreibzugriff pro Reader und Tag. „Nur Tageswerte“ behält daher die Tagesbalken und die Tagesbasis für die MQTT-today_*-Felder nach einem Neustart. Bei „Aus“ bleiben today_* nach einem Neustart bis zum nächsten Mitternacht leer. Die Verlaufsseite zeigt in beiden Fällen die letzten Messpunkte aus dem RAM. Gespeicherte Daten werden nie gelöscht – Umschalten stoppt bzw. setzt nur die Schreibzugriffe fort.',
+ 'The raw samples are the only frequent writer (at most one per reader per 30 s); a daily row is ONE write per reader per day. "Daily rows only" therefore keeps the daily bars and the start-of-day baseline the MQTT today_* fields recover from after a restart. With "Off", today_* stays empty after a restart until the next midnight. In both cases the History page shows the most recent samples from RAM. Nothing stored is ever deleted — switching only stops or resumes the writes.');
+$('caphist').textContent=$('caphist').dataset.base;
 $('numfmt').options[0].textContent=t('Automatisch (nach Sprache)','Automatic (follows the text language)');
 $('numfmt').options[1].textContent=t('1.234,56 (europäisch)','1.234,56 (European)');
 $('numfmt').options[2].textContent=t('1,234.56 (US)','1,234.56 (US)');
@@ -339,6 +357,7 @@ $('lorasf').options[0].textContent=t('SF7 (Standard)','SF7 (default)');$('lorasf
 $('lorawarn').textContent=t('Nur ändern, wenn ALLE Reader bereits mit der passenden SF-Firmware geflasht sind — sonst verlieren sie sofort nach dem Neustart die Verbindung. Änderung wirkt erst nach einem Neustart des Gateways.','Only change this once ALL readers are already flashed with matching-SF firmware — otherwise they lose the connection the moment this reboots. Takes effect after a gateway reboot.');
 $('lorawarn9').textContent=t('SF9 kostet deutlich mehr Sendezeit pro Übertragung (grob das 3,4-Fache) und damit spürbar mehr Akku beim Reader als SF7 — nur für Reader mit schwachem Empfang sinnvoll. Inoffizielle, ungetestete Anpassung der Reader-Firmware: Nutzung auf eigenes Risiko.','SF9 costs noticeably more airtime per transmission (roughly 3.4×) and therefore meaningfully more reader battery than SF7 — only worth it for readers with a weak signal. An unofficial, off-label reader firmware patch: use at your own risk.');
 $('blorasave').textContent=t('Speichern','Save');
+let mqMax={host:63,user:63,pass:127,topic:47};   // firmware buffer limits; refreshed from /api/status
 let cfg=false,tzc=false,ghc=false,loraSfc=false,ftpc=false,ghBusy=false,ecoc=false,ecoSel='auto',ecoPairing=false,blec=false,bleSel='';
 function loraSfChanged(){$('lorawarn9').style.display=$('lorasf').value==='9'?'':'none';}
 async function load(){try{
@@ -347,8 +366,10 @@ async function load(){try{
   if(s.ap)$('apstat').innerHTML=`<code>${s.ap.ssid}</code> — `+(s.ap.pass_set?`<span class="dot on"></span>${t('passwortgeschützt','password-protected')}`:`<span class="dot idle"></span>${t('offen — kein Passwort','open — no password')}`);
   const q=s.mqtt;
   const tls=q.tls?' · TLS':'';
-  $('mqstat').innerHTML=!q.enabled?`<span class="dot idle"></span>${t('deaktiviert','disabled')}`:q.connected?`<span class="dot on"></span>${t('verbunden','connected')} · ${q.host}${tls}`:`<span class="dot off"></span>${t('getrennt','disconnected')} — ${q.state}${tls}`;
-  if(!cfg){cfg=true;$('mh').value=q.host||'';$('mp').value=q.port||1883;$('mu').value=q.user||'';$('mt').value=q.topic||'';
+  $('mqstat').innerHTML=!q.enabled?`<span class="dot idle"></span>${t('deaktiviert','disabled')}`:q.connected?`<span class="dot on"></span>${t('verbunden','connected')} · ${q.host}${tls}`:`<span class="dot off"></span>${t('getrennt','disconnected')} — ${q.state}${tls}${q.last_err?' · '+esc(q.last_err):''}`;
+  // take the real buffer sizes from the firmware so the input limits can't drift away from it
+  if(q.max){mqMax=q.max;$('mh').maxLength=q.max.host;$('mu').maxLength=q.max.user;$('mpw').maxLength=q.max.pass;$('mt').maxLength=q.max.topic;}
+  if(!cfg){cfg=true;$('histstore').value=String((s.hist_fs&&s.hist_fs.mode)||0);$('mh').value=q.host||'';$('mp').value=q.port||1883;$('mu').value=q.user||'';$('mt').value=q.topic||'';
    $('mtls').checked=!!q.tls;if(q.ca_set)$('mca').placeholder=t('Zertifikat gespeichert — leer lassen zum Beibehalten','certificate saved — leave blank to keep');
    $('au').value=(s.auth&&s.auth.user)||'';$('night').checked=!!s.night_mode;$('aplim').checked=!!(s.ap&&s.ap.limit);$('numfmt').value=s.num_fmt||0;
    $('gwname').value=s.gw_custom_name||'';
@@ -357,6 +378,10 @@ async function load(){try{
    // this on starts from "what already works" instead of blank fields the user has to look up themselves.
    $('stipip').value=si.on?si.ip:(si.cur_ip||'');$('stipsn').value=si.on?(si.sn||'255.255.255.0'):(si.cur_sn||'255.255.255.0');
    $('stipgw').value=si.on?si.gw:(si.cur_gw||'');$('stipd1').value=si.on?si.dns1:(si.cur_dns1||'');$('stipd2').value=si.on?si.dns2:(si.cur_dns2||'');}
+  { const hf=s.hist_fs||{};   // show how full the RAM ring is while flash storage is reduced/off
+    const extra=hf.mode?(' — '+(hf.ram_cap?hf.ram+'/'+hf.ram_cap+t(' Messpunkte im RAM',' samples in RAM')
+                                           :t('kein RAM-Puffer (zu wenig Heap)','no RAM buffer (not enough heap)'))):'';
+    $('caphist').textContent=($('caphist').dataset.base||'')+extra; }
   { const orig='ObiUnlocked '+s.gw;
     $('gwnstat').innerHTML=s.gw_custom_name?`${t('aktiv als','active as')} <code>${esc(s.gw_custom_name)}</code> · ${t('original','original')}: <code>${orig}</code>`:`${t('Standardname aktiv','using the default name')}: <code>${orig}</code>`; }
   { const si=s.static_ip||{};
@@ -404,6 +429,10 @@ async function load(){try{
 }catch(e){}}
 function tzPick(){const v=$('tzsel').value;if(v)$('tztext').value=v;}
 async function saveNightMode(){const m=$('nmsg');m.textContent='…';try{const r=await(await fetch('/api/night_mode',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'enabled='+($('night').checked?'1':'0')})).json();if(!r.ok)throw Error();m.textContent=t('gespeichert ','saved ');setTimeout(()=>m.textContent='',3000);}catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
+async function saveHistMode(){const m=$('histmsg');m.textContent='…';
+ try{const r=await(await fetch('/api/histmode',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'mode='+$('histstore').value})).json();
+  if(!r.ok)throw Error();m.textContent=t('gespeichert ','saved ');setTimeout(()=>m.textContent='',3000);load();}
+ catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
 async function saveNumFmt(){const m=$('numfmtmsg');m.textContent='…';try{const r=await(await fetch('/api/numfmt',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:'fmt='+$('numfmt').value})).json();if(!r.ok)throw Error();m.textContent=t('gespeichert ','saved ');setTimeout(()=>m.textContent='',3000);}catch(e){m.textContent=t('Speichern fehlgeschlagen','save failed');}}
 // One /api/readers round trip fills both reader pickers (EcoTracker and BTHome). Only assigned meters
 // are offered: neither feature can publish a reader the gateway is not bound to.
@@ -578,10 +607,22 @@ async function saveStaticIp(){const on=$('stipon').checked;
   const r=await(await fetch('/api/staticip',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b})).json();
   if(!r.ok){$('stipmsg').textContent=t('Speichern fehlgeschlagen: ','save failed: ')+(r.err||'?');return;}
  }catch(e){}   // the gateway reboots right after answering -- a dropped connection here is expected, not a failure
- $('stipmsg').textContent=t('gespeichert — Gateway startet neu… Dashboard ggf. unter neuer IP erneut öffnen.','saved — gateway restarting… reopen the dashboard at the new IP if it changed.');}
-async function saveMqtt(){const b=new URLSearchParams();b.set('host',$('mh').value);b.set('port',$('mp').value||1883);b.set('user',$('mu').value);b.set('topic',$('mt').value);if($('mpw').value)b.set('pass',$('mpw').value);
+ $('stipmsg').textContent=t('gespeichert  — Gateway startet neu… Dashboard ggf. unter neuer IP erneut öffnen.','saved  — gateway restarting… reopen the dashboard at the new IP if it changed.');}
+async function saveMqtt(){
+ // Warn BEFORE saving: a value longer than the firmware buffer used to be truncated silently and the
+ // broker then refused the connection with nothing in the UI explaining it. maxlength= above stops normal
+ // typing/pasting; this catches anything that gets past it (and tells the user which field is the problem).
+ for(const f of [['mh',mqMax.host,t('Server','server')],['mu',mqMax.user,t('Benutzer','user')],
+                 ['mpw',mqMax.pass,t('Passwort','password')],['mt',mqMax.topic,t('Basis-Topic','base topic')]])
+  if($(f[0]).value.length>f[1]){$('mqmsg').textContent=f[2]+t(' zu lang: maximal ',' too long: max ')+f[1]+t(' Zeichen',' characters');return;}
+ const b=new URLSearchParams();b.set('host',$('mh').value);b.set('port',$('mp').value||1883);b.set('user',$('mu').value);b.set('topic',$('mt').value);if($('mpw').value)b.set('pass',$('mpw').value);
  b.set('tls',$('mtls').checked?'1':'0');if($('mca').value.trim())b.set('ca',$('mca').value.trim());  // blank CA = keep existing / encrypt-only
- $('mqmsg').textContent='…';await fetch('/api/mqtt',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b});$('mpw').value='';$('mqmsg').textContent=t('gespeichert ','saved ');setTimeout(()=>$('mqmsg').textContent='',3000);load();}
+ $('mqmsg').textContent='…';
+ let ok=true,msg='';
+ try{const r=await(await fetch('/api/mqtt',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b})).json();
+     if(r&&r.ok===false){ok=false;msg=r.err||'?';}}catch(e){}
+ if(!ok){$('mqmsg').textContent=t('nicht gespeichert — ','not saved — ')+msg;return;}
+ $('mpw').value='';$('mqmsg').textContent=t('gespeichert ','saved ');setTimeout(()=>$('mqmsg').textContent='',3000);load();}
 async function saveAuth(){const u=$('au').value.trim(),p=$('ap').value;
  if(u&&!p){$('aumsg').textContent=t('Benutzer und Passwort nötig','user and password required');return;}   // no user-without-password
  const b=new URLSearchParams();b.set('user',u);if(p)b.set('pass',p);
@@ -590,6 +631,34 @@ async function saveAuth(){const u=$('au').value.trim(),p=$('ap').value;
  if(u){location.href='/login';return;}   // auth on -> (re)login with the new credentials
  $('aumsg').textContent=t('gespeichert ','saved ');setTimeout(()=>$('aumsg').textContent='',4000);load();}
 async function logout(){await fetch('/api/logout',{method:'POST'});location.href='/login';}
+// Issue #112: a failing MQTTS connection is invisible from the outside -- the broker logs "bad
+// certificate", which is only the alert mbedTLS sends after WE rejected its certificate. /api/mqtt/tlsdiag
+// repeats the handshake without verification and verifies the received chain by hand, so the real reason
+// can be printed here. Uses whatever is currently typed in the form, so a config can be tested unsaved.
+async function tlsDiag(){const o=$('tlsout');o.textContent=t('prüfe …','checking …');
+ const b=new URLSearchParams();
+ if($('mh').value.trim())b.set('host',$('mh').value.trim());
+ if($('mp').value)b.set('port',$('mp').value);
+ if($('mca').value.trim())b.set('ca',$('mca').value.trim());   // blank = use the stored CA
+ let r;try{r=await(await fetch('/api/mqtt/tlsdiag',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:b})).json();}
+ catch(e){o.textContent=t('Prüfung fehlgeschlagen','check failed');return;}
+ if(!r.ok){o.textContent=t('Prüfung nicht möglich: ','check not possible: ')+(r.error||'?');return;}
+ const L=[`${r.host}:${r.port} — `+(r.handshake?t('TLS-Handshake ok','TLS handshake ok')
+  :r.tcp===false?t('nicht erreichbar','unreachable'):t('kein TLS-Handshake','no TLS handshake'))];
+ if(!r.handshake){L.push('   '+(r.err||''));o.textContent=L.join('\n');return;}
+ (r.chain||[]).forEach((c,i)=>{L.push(`#${i+1} ${c.subject}`);
+  L.push('   '+t('ausgestellt von','issued by')+': '+c.issuer);
+  L.push('   '+t('gültig','valid')+': '+c.from+' … '+c.to);
+  if(c.expired)L.push('   ! '+t('Zertifikat ist abgelaufen — die TLS-Bibliothek dieser Firmware prüft das NICHT selbst','certificate has expired — this firmware\'s TLS library does NOT check that itself'));
+  if(c.not_yet)L.push('   ! '+t('Zertifikat ist noch nicht gültig (Uhr/Ausstellungsdatum prüfen)','certificate is not valid yet (check the clock / issue date)'));
+  if(c.san&&c.san.length)L.push('   SAN: '+c.san.join(', '));});
+ if(r.verify==null&&!r.ca_set)L.push(t('Kein CA-Zertifikat gespeichert — MQTTS verschlüsselt dann nur, ohne das Zertifikat zu prüfen.','No CA certificate stored — MQTTS then only encrypts, it does not verify the certificate.'));
+ else if(r.verify==null)L.push(t('CA-Zertifikat nicht lesbar (PEM?) — mbedTLS-Code ','CA certificate could not be parsed (PEM?) — mbedTLS code ')+r.ca_parse);
+ else if(r.verify.ok)L.push(t('Zertifikat gegen die CA geprüft ','certificate verified against the CA'));
+ else{L.push(t('Prüfung fehlgeschlagen:','verification failed:'));(r.verify.reasons||[]).forEach(x=>L.push('   ! '+x));
+  L.push(t('Der Name oben (Host/IP) muss im CN oder in den SANs stehen — sonst nie erfolgreich.','The name dialled above (host/IP) must appear in the CN or the SANs — otherwise it can never succeed.'));}
+ if(!r.time_valid)L.push(t('Hinweis: Uhr nicht synchron — die Gültigkeitsdaten konnten nicht geprüft werden.','note: clock not synced — the validity dates could not be checked.'));
+ o.textContent=L.join('\n');}
 async function disc(){$('mqmsg').textContent='…';try{const r=await(await fetch('/api/rediscover',{method:'POST'})).json();$('mqmsg').textContent=r.ok?t('Discovery gesendet ','discovery sent ')+' ('+r.count+')':t('MQTT nicht verbunden','MQTT not connected');}catch(e){$('mqmsg').textContent='error';}setTimeout(()=>$('mqmsg').textContent='',4000);}
 async function ghCheck(){const box=$('ghbox');box.className='msg';box.textContent=t('GitHub wird geprüft…','checking GitHub…');
  try{const r=await(await fetch('/api/github/latest')).json();

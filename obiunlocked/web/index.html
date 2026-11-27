@@ -5,6 +5,7 @@
 <section id="s_strom">
  <div class="bar"><button class="btn pri" id="pair_btn"></button><span class="dim" id="pair_st"></span><span class="sp"></span>
   <label class="ck" id="hideunb_w"><input type="checkbox" id="hideunb_cb"><span id="hideunb_lbl"></span></label><span class="dim" id="hideunb_badge"></span></div>
+ <div class="alerts" id="alerts"></div>
  <div class="readers" id="list"></div>
 </section>
 <section id="s_meine" hidden>
@@ -51,6 +52,9 @@ const T={de:{
  imp:'Bezug',exp:'Einspeisung',pow:'Leistung',batt:'Batterie',opt:'Optik',active:'aktiv',nosig:'kein Signal',seen:'Zuletzt',ago:'vor',
  pending:'nicht gebunden',bind:'An dieses Gateway binden',pendhint:'Nur sichtbar – noch nicht an dieses Gateway gebunden.',
  uuidwait:'UUID noch unbekannt – Lesekopf per Taste neu verbinden',boot:'Bootloader-Modus – bereit zum Flashen',
+ alNoSig:'seit %s kein Signal mehr',alGone:'seit dem Start des Gateways nicht gesehen (%s)',
+ alBatt:'Batterie schwach (%s V)',alBoot:'steckt im Bootloader-Modus – kein Messbetrieb',
+ alDis:'Meldung ausblenden (kommt wieder, wenn das Problem erneut auftritt)',
  irhint:'Noch keine Messwerte – Taste am Lesekopf einmal kurz drücken, um die Infrarot-Lesung zu starten.',
  edit:'Bearbeiten',done:'Fertig',delS:'Löschen',reset:'Zurücksetzen',hide:'ausblenden',show:'einblenden',del:'Lesegerät löschen',
  delq:'Lesegerät %i löschen und Bindung entfernen?\n\nEs taucht beim nächsten Empfang ausgegraut wieder auf.',boxerr:'Layout konnte nicht gespeichert werden – bitte erneut versuchen.',
@@ -87,6 +91,9 @@ Object.assign(T.en,T.de,{hist:'History',radio:'OBI radio',set:'Settings',dbg:'De
  hideUnb:'Hide unbound',unbHidden:'unbound hidden',unbShow:'show',unbHideAgain:'hide again',waiting:'No OBI reader yet. Hold the reader button ~10 s (switch the original gateway off).',
  imp:'Import',exp:'Export',pow:'Power',batt:'Battery',opt:'Optical',active:'active',nosig:'no signal',seen:'Last seen',ago:'',
  pending:'not bound',bind:'Bind to this gateway',pendhint:'Shown only – not bound to this gateway yet.',uuidwait:'UUID unknown – reconnect the reader with its button',
+ alNoSig:'no signal for %s',alGone:'not seen since the gateway started (%s)',
+ alBatt:'battery low (%s V)',alBoot:'stuck in bootloader mode – not metering',
+ alDis:'dismiss (comes back if the problem happens again)',
  boot:'Bootloader mode – ready to flash',irhint:'No readings yet – tap the reader button once to start the infrared readout.',
  edit:'Edit',done:'Done',delS:'Delete',reset:'Reset',hide:'hide',show:'show',del:'Delete reader',
  delq:'Delete reader %i and remove its binding?\n\nIt reappears greyed on the next reception.',boxerr:'Could not save the layout – please try again.',
@@ -128,6 +135,25 @@ function applyLang(){L=T[lang];document.documentElement.lang=lang;
  cfgDrawn=false;renderCats();}
 /* ---------------- OBI readers (status + cards) ---------------- */
 const openAdv=new Set();
+// ---- alerts: a bound reader that stopped reporting should say so, not quietly disappear (upstream v1.2.89) ----
+// WHAT counts as broken is decided in the firmware (include/reader_status.h) and arrives as r.problems, the
+// same verdict that goes out over MQTT as the reader's status. st.readers_missing lists bound readers that
+// have no live slot since the gateway started and whose report is overdue.
+const AL_NO_SIGNAL=1,AL_BATT=2,AL_BOOT=4;   // bits of r.problems, see reader_status.h
+let _alDis={};try{_alDis=JSON.parse(localStorage.getItem('obialert')||'{}')||{};}catch(e){_alDis={};}
+function alSave(){try{localStorage.setItem('obialert',JSON.stringify(_alDis));}catch(e){}}
+function alertList(st,rs){const out=[];
+ (st.readers_missing||[]).forEach(m=>out.push({k:m.id+'|gone',nm:m.name||m.id.toUpperCase(),msg:L.alGone.replace('%s',dur(st.uptime_s||0))}));
+ (rs||[]).filter(r=>r.assigned).forEach(r=>{const nm=r.name||r.id.toUpperCase(),pr=r.problems||0;
+  if(pr&AL_NO_SIGNAL)out.push({k:r.id+'|silent',nm:nm,msg:L.alNoSig.replace('%s',dur(r.age_s))});
+  if(pr&AL_BATT)out.push({k:r.id+'|batt',nm:nm,msg:L.alBatt.replace('%s',(r.battery_mV/1000).toFixed(2))});
+  if(pr&AL_BOOT)out.push({k:r.id+'|boot',nm:nm,msg:L.alBoot});});
+ return out;}
+// Dismissing hides the CURRENT episode only: once a condition clears its dismissal is forgotten.
+function renderAlerts(st,rs){if(!st)return;const list=alertList(st,rs),live={};list.forEach(a=>live[a.k]=1);
+ let ch=false;Object.keys(_alDis).forEach(k=>{if(!live[k]){delete _alDis[k];ch=true;}});if(ch)alSave();
+ $('#alerts').innerHTML=list.filter(a=>!_alDis[a.k]).map(a=>`<div class="alert"><span><b>${esc(a.nm)}</b> – ${a.msg}</span><button class="btn ghost sm" title="${esc(L.alDis)}" data-al="${esc(a.k)}">&times;</button></div>`).join('');}
+$('#alerts').onclick=e=>{const k=e.target.dataset&&e.target.dataset.al;if(!k)return;_alDis[k]=1;alSave();renderAlerts(lastStatus,_rs);};
 let lastStatus=null,_rs=[],editId=null,uploading=false,_hideUnbound=false,_revealTmp=false,_pairActive=false;
 async function tick(){try{
  const st=await(await fetch('/api/status')).json(),rs=await(await fetch('/api/readers')).json();_rs=rs;lastStatus=st;numFmt=st.num_fmt||0;
@@ -140,6 +166,7 @@ async function tick(){try{
  const hf=st.hist_fs;
  $('#ft').textContent=`${L.uptime} ${dur(st.uptime_s)} · ${L.heap} ${kb(st.max_alloc_heap)}`+(st.fw?` · ObiUnlocked ${st.fw.version} (${st.fw.target})`:'')+
   (hf&&hf.ok?` · ${L.histfs} ${kb(hf.total-hf.used)}/${kb(hf.total)} · ${L.dailyfs} ${kb(hf.daily_total-hf.daily_used)}/${kb(hf.daily_total)}`:'')+` · ${st.gwid_ascii||''} ${st.mac||''}`;
+ renderAlerts(st,rs);   // outside the editing freeze below -- a warning must not wait
  const ae=document.activeElement,busy=editId!==null||(ae&&/^(iv_|fw_)/.test(ae.id||''))||$$('#list input[type=file]').some(i=>i.files.length);
  if(!busy&&!uploading)drawReaders();
  if(st.ota&&st.ota.active){const el=$('#op_'+st.ota.target);if(el){const o=st.ota,at=o.pos!=null?o.pos:o.served,p=o.size?Math.min(100,Math.round(at/o.size*100)):0;

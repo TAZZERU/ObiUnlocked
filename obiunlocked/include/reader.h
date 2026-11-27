@@ -2,6 +2,8 @@
 #pragma once
 #include <Arduino.h>
 #include "energy_filter.h"   // obi_na() + the counter plausibility rules shared with the host tests
+#include "tariff_window.h"   // minute-of-day tariff windows + their wire format, also host-tested
+#include "reader_status.h"   // when a reader counts as broken -- one rule for web, API and MQTT
 
 struct Reader {
   bool     used     = false;
@@ -17,6 +19,14 @@ struct Reader {
   float    lastRssi = -70;
   float    lastSnr  = 0;         // SX1262 packet SNR (dB) of the last frame from this reader
   uint8_t  key[16];
+  // A key RESTORED from NVS (loadKey() in main.cpp) has not yet proven that it is still the key the reader
+  // holds -- the reader may have been re-paired to another gateway or reset in the meantime, and nothing
+  // says so until a frame decodes. For the 1.2.x layout the payload's own CRC16 settles that. The legacy
+  // layout has no CRC (legacyValid() accepts ~11% of random plaintext, see energy_filter.h), so a restored
+  // key must additionally reproduce the softver/hardver bytes stored next to it before it is trusted.
+  bool     keyRestored = false;  // key came from NVS, no live ECDH behind it yet
+  uint8_t  keySoftver  = 0;      // reader versions seen when this key was last persisted (0 = unknown)
+  uint8_t  keyHardver  = 0;
   // identity (from the announce: cmd 17/35)
   bool     haveUuid = false;
   uint8_t  uuid[16];             // 16-byte device UUID
@@ -57,6 +67,9 @@ struct Reader {
   uint32_t mqttPubEnergyMs = 0;     // lastEnergyMs value at the last MQTT publish — drives event-driven publishing
                                     // (publish the moment a fresh energy frame differs from this). Owned by the
                                     // web/MQTT task only; lastEnergyMs is written by the LoRa task (atomic uint32).
+  uint8_t  mqttHealth = 0xFF;       // problem mask last published on <base>/<id>/health (0xFF = nothing
+                                    // published yet, also reset on each MQTT connect). Publishes only on a
+                                    // change, so a healthy reader costs one message, not one per pass.
   int8_t   mqttAvail = -1;          // last per-reader availability published on <base>/<id>/status:
                                     // 1 = online, 0 = offline, -1 = nothing published yet (also reset on each
                                     // MQTT connect so the retained state is re-asserted). Only publishes on a
@@ -86,8 +99,13 @@ struct Reader {
                                      // 2-zone-or-off config either way -- see savePriceCfg()/loadPriceCfg().
   float    htPriceCent = -1;        // Hochlast price ct/kWh; -1 = not set (falls back to priceCentOverride)
   float    ntPriceCent = -1;        // Niedriglast price ct/kWh; -1 = falls back to priceCentOverride
-  uint8_t  htStart[2] = {0, 0}, htEnd[2] = {0, 0};   // up to 2 HT windows
-  uint8_t  ntStart[2] = {0, 0}, ntEnd[2] = {0, 0};   // up to 2 NT windows
+  // Window edges are MINUTES SINCE LOCAL MIDNIGHT (0..1439), not whole hours: grid operators define §14a
+  // windows on quarter hours since metering moved to 15-minute intervals (e.g. HT 10:45-12:30). The two
+  // conventions are unchanged -- start == end means the slot is unused, start > end wraps past midnight.
+  // See tariff_window.h for the window/zone rules and obi_parse_minute() for the accepted spellings; a
+  // config stored by a firmware that only knew hours loads as hour*60 (loadPriceCfg() in main.cpp).
+  uint16_t htStart[2] = {0, 0}, htEnd[2] = {0, 0};   // up to 2 HT windows
+  uint16_t ntStart[2] = {0, 0}, ntEnd[2] = {0, 0};   // up to 2 NT windows
 };
 
 // Reader slots (bound + recently heard unbound ones). 16 is generous for a household; every slot costs ~250 B
@@ -120,14 +138,26 @@ bool gw_assign_reader(const uint8_t handle[3], bool on);              // accept 
 bool gw_set_reader_name(const uint8_t handle[3], const char *name);   // set ("" clears) the friendly name; false = unknown reader
 bool gw_set_reader_boxcfg(const uint8_t handle[3], const char *cfg);  // set ("" clears) the dashboard box layout; false = unknown reader
 // set (or clear, with a negative price) a reader's price override / day-night tariff / §14a HT-ST-NT tariff;
-// false = unknown reader. nightStart/nightEnd and every htXs/htXe/ntXs/ntXe are hours 0-23 (a pair with
-// start==end means "unused"); the caller always sends the full set together (see /api/reader/price).
+// false = unknown reader. nightStart/nightEnd are hours 0-23; every htXs/htXe/ntXs/ntXe is a MINUTE OF DAY
+// 0-1439 (a pair with start==end means "unused", start>end wraps past midnight -- see tariff_window.h).
+// The caller always sends the full set together (see /api/reader/price).
 bool gw_set_reader_price(const uint8_t handle[3], float priceCent, float exportCent,
                           bool nightOn, uint8_t nightStart, uint8_t nightEnd, float nightPriceCent,
                           uint8_t tariffMode, float htPriceCent, float ntPriceCent,
-                          uint8_t ht0s, uint8_t ht0e, uint8_t ht1s, uint8_t ht1e,
-                          uint8_t nt0s, uint8_t nt0e, uint8_t nt1s, uint8_t nt1e);
+                          uint16_t ht0s, uint16_t ht0e, uint16_t ht1s, uint16_t ht1e,
+                          uint16_t nt0s, uint16_t nt0e, uint16_t nt1s, uint16_t nt1e);
 void gw_pair_all(uint16_t seconds);                                   // open a window that auto-assigns every reader
+// A reader this gateway is BOUND to, as persisted in NVS -- including one that has not been heard from
+// since boot and therefore has no live slot in readers[] at all. Needed to tell "this reader is silent"
+// apart from "this reader was never here", which is what the dashboard's alert banner reports.
+struct GwKnownReader {
+  uint8_t  handle[3];
+  char     name[25];    // the stored friendly name, "" if none was set (same bound as gw_set_reader_name)
+  uint16_t interval;    // its effective upload interval in seconds (the stored one, or the default when
+                        // none was ever configured) -- the dashboard needs it to know when a report from a
+                        // missing reader is actually overdue
+};
+int gw_known_readers(GwKnownReader *out, int max);                    // count written; <= max
 uint32_t gw_pair_remaining_s();                                       // seconds left in the auto-pair window (0 = off)
 
 // live radio log (ring buffer) for the /radio web page
